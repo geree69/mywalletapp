@@ -5,7 +5,6 @@ import { useAppContext } from '../context/AppContext';
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-// MISMO MOTOR DEL TIEMPO AQUÍ
 const expandTxs = (txs: any[]) => {
   const expanded: any[] = [];
   const todayStr = new Date().toISOString().split('T')[0];
@@ -85,19 +84,38 @@ export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen
       accountId 
     };
 
+    let updatedAccounts = [...(state.accounts || [])];
+
+    // Si estamos EDITANDO, primero devolvemos el dinero de la transacción antigua a su cuenta original
+    if (editItem && editItem.accountId) {
+      const oldVal = Number(editItem.amount) || 0;
+      updatedAccounts = updatedAccounts.map((acc: any) => {
+        if (acc.id === editItem.accountId) {
+          return { ...acc, balance: Number(acc.balance || 0) + (editItem.type === 'expense' ? oldVal : -oldVal) };
+        }
+        return acc;
+      });
+    }
+
+    // Ahora aplicamos el dinero de la NUEVA transacción a la cuenta seleccionada
+    if (accountId) {
+      updatedAccounts = updatedAccounts.map((acc: any) => {
+        if (acc.id === accountId) {
+          return { ...acc, balance: Number(acc.balance || 0) + (type === 'expense' ? -val : val) };
+        }
+        return acc;
+      });
+    }
+
     if (editItem) {
       newState.transactions = currentTxs.map((t: any) => t.id === editItem.id ? newTx : t);
     } else {
       newState.transactions = [...currentTxs, newTx];
     }
 
-    // Calcula el balance global teniendo en cuenta las fechas que sí han llegado
-    let globalBalance = 0;
-    expandTxs(newState.transactions).forEach((t: any) => {
-      if (t.type === 'income') globalBalance += Number(t.amount || 0);
-      if (t.type === 'expense') globalBalance -= Number(t.amount || 0);
-    });
-    newState.balance = globalBalance;
+    // Actualizamos las cuentas y sincronizamos el balance global por si acaso
+    newState.accounts = updatedAccounts;
+    newState.balance = updatedAccounts.reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
 
     const ok = await saveState(newState);
     if (ok) onClose();
@@ -117,21 +135,19 @@ export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen
             <button className={`flex-1 p-2.5 rounded-[10px] border text-[13px] font-medium transition-colors ${type === 'income' ? 'bg-[var(--teal-l)] border-[var(--teal-d)] text-[var(--teal-d)]' : 'bg-[var(--paper-2)] border-[var(--paper-line)] text-[var(--text-soft)]'}`} onClick={() => setType('income')}>Ingreso</button>
           </div>
 
-          {state.accounts && state.accounts.length > 1 && (
-            <div className="mb-4">
-              <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">¿En qué cuenta?</label>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]">
-                {state.accounts.map((acc: any) => (
-                  <option key={acc.id} value={acc.id}>{acc.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="mb-4">
+            <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">¿En qué cuenta?</label>
+            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]">
+              {state.accounts && state.accounts.map((acc: any) => (
+                <option key={acc.id} value={acc.id}>{acc.name}</option>
+              ))}
+            </select>
+          </div>
 
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div>
               <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Importe (€)</label>
-              <input type="number" step="0.01" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]" />
+              <input type="number" step="any" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]" />
             </div>
             <div>
               <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Fecha</label>

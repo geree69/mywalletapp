@@ -1,199 +1,189 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-export default function AddInvestmentModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
+export default function AddInvestmentModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { state, saveState } = useAppContext();
-  
+
   const [name, setName] = useState('');
-  const [type, setType] = useState('Fondos Indexados');
-  const [where, setWhere] = useState('');
-  const [date, setDate] = useState('');
-  const [amount, setAmount] = useState('');
-  const [buyPrice, setBuyPrice] = useState('');
-  const [qty, setQty] = useState('');
-  const [restFromBalance, setRestFromBalance] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      setName('');
-      setType('Fondos Indexados');
-      setWhere('');
-      setDate(new Date().toISOString().split('T')[0]);
-      setAmount('');
-      setBuyPrice('');
-      setQty('');
-      setRestFromBalance(false);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    const numAmount = parseFloat(amount) || 0;
-    const numPrice = parseFloat(buyPrice) || 0;
-    if (numAmount > 0 && numPrice > 0) {
-      setQty((numAmount / numPrice).toFixed(6));
-    } else {
-      setQty('');
-    }
-  }, [amount, buyPrice]);
+  const [category, setCategory] = useState('Fondos Indexados');
+  const [broker, setBroker] = useState('');
+  const [amountInvested, setAmountInvested] = useState(''); 
+  const [buyPrice, setBuyPrice] = useState(''); 
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedAccountId, setSelectedAccountId] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSave = async () => {
-    const numAmount = parseFloat(amount) || 0;
-    const numBuyPrice = parseFloat(buyPrice) || 0;
-    const numQty = parseFloat(qty) || (numBuyPrice > 0 ? numAmount / numBuyPrice : 0);
-    const finalName = name.trim();
+  const accounts = state.accounts || [];
 
-    if (!finalName || numAmount <= 0) {
-      alert("Por favor rellena el nombre del activo y el capital invertido.");
-      return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !amountInvested || !buyPrice) return alert("Por favor, rellena los campos obligatorios.");
+
+    const totalCost = parseFloat(amountInvested.replace(',', '.')) || 0;
+    const price = parseFloat(buyPrice.replace(',', '.')) || 0;
+    
+    if (totalCost <= 0 || price <= 0) return alert("El importe y el precio deben ser mayores que 0.");
+
+    // Calculamos cuántos títulos o acciones has comprado en esta aportación
+    const numShares = totalCost / price;
+
+    let updatedInvestments = state.investments ? [...state.investments] : [];
+    
+    // LA MAGIA: Buscamos si ya tienes una inversión con exactamente el mismo nombre (sin importar mayúsculas)
+    const existingIndex = updatedInvestments.findIndex(
+      inv => inv.name.trim().toLowerCase() === name.trim().toLowerCase()
+    );
+
+    if (existingIndex >= 0) {
+      // SI YA EXISTE: Promediamos y sumamos
+      const existingInv = updatedInvestments[existingIndex];
+      
+      const oldShares = Number(existingInv.shares) || 0;
+      const oldBuyPrice = Number(existingInv.buyPrice) || 0;
+      const oldTotalInvested = oldShares * oldBuyPrice;
+      
+      const newTotalShares = oldShares + numShares;
+      const newTotalInvested = oldTotalInvested + totalCost;
+      const newAvgBuyPrice = newTotalInvested / newTotalShares;
+
+      updatedInvestments[existingIndex] = {
+        ...existingInv,
+        shares: newTotalShares,
+        buyPrice: newAvgBuyPrice,
+        // Mantenemos el precio actual que tenías puesto en el panel para que no lo tengas que volver a escribir
+        currentPrice: existingInv.currentPrice || price,
+        date: date // Actualizamos la fecha a la última aportación
+      };
+    } else {
+      // SI NO EXISTE: La creamos nueva
+      const newInv = {
+        id: uid(),
+        name: name.trim(),
+        category,
+        broker: broker.trim(),
+        shares: numShares,
+        buyPrice: price,
+        currentPrice: price,
+        date,
+        accountId: selectedAccountId
+      };
+      updatedInvestments.push(newInv);
     }
 
-    const newInv = {
-      id: uid(),
-      name: finalName,
-      type,
-      where: where.trim() || "Desconocido",
-      date: date || new Date().toISOString().split('T')[0],
-      amount: numAmount,
-      buyPrice: numBuyPrice,
-      quantity: numQty,
-      currentValue: numAmount,
-      currentPrice: numBuyPrice || numAmount,
-      isCrypto: false
+    let updatedAccounts = [...accounts];
+    let updatedTransactions = state.transactions ? [...state.transactions] : [];
+
+    if (selectedAccountId) {
+      updatedAccounts = updatedAccounts.map((acc: any) => {
+        if (String(acc.id) === String(selectedAccountId)) {
+          return { ...acc, balance: (Number(acc.balance) || 0) - totalCost };
+        }
+        return acc;
+      });
+
+      // El historial contable sí guarda esta compra individual de forma correcta
+      updatedTransactions.push({
+        id: uid(),
+        title: `Inversión: ${name.trim()}`,
+        amount: -totalCost, 
+        type: 'expense', 
+        accountId: selectedAccountId,
+        date,
+        category: 'Inversión'
+      });
+    }
+
+    const calculatedGlobalBalance = updatedAccounts.reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
+
+    const newState = {
+      ...state,
+      balance: calculatedGlobalBalance, 
+      investments: updatedInvestments,
+      accounts: updatedAccounts,
+      transactions: updatedTransactions
     };
 
-    const newState = { ...state };
-    newState.investments = [...(newState.investments || []), newInv];
-
-    if (restFromBalance) {
-      if (newState.mergeAccounts) {
-        newState.balance = (newState.balance || 0) - numAmount;
-        if (newState.savings) newState.savings.amount = (newState.savings.amount || 0) - numAmount;
-      } else {
-        newState.balance = (newState.balance || 0) - numAmount;
-      }
-    }
-
     const ok = await saveState(newState);
-    if (ok) onClose();
+    if (ok) {
+      setName('');
+      setCategory('Fondos Indexados');
+      setBroker('');
+      setAmountInvested('');
+      setBuyPrice('');
+      setSelectedAccountId('');
+      onClose();
+    }
   };
 
   return (
-    <div className="absolute inset-0 bg-black/70 backdrop-blur-[4px] z-[100] flex items-end justify-center" onClick={onClose}>
-      <div 
-        className="bg-[var(--paper)] w-full max-h-[85%] rounded-t-[24px] flex flex-col border-t border-[var(--paper-line)] animate-[fade_0.3s_ease]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Cabecera Fija */}
-        <div className="px-6 py-5 border-b border-[var(--paper-line)] shrink-0 flex justify-between items-center">
-          <h3 className="font-['Playfair_Display'] text-[19px] font-bold m-0 text-[var(--ink)]">Añadir inversión / activo</h3>
-          <button onClick={onClose} className="text-[20px] leading-none text-[var(--text-soft)] bg-transparent border-none cursor-pointer p-1">×</button>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] w-full max-w-md p-5 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center border-b border-[var(--paper-line)] pb-3">
+          <h3 className="font-['Playfair_Display'] text-[16px] font-semibold text-[var(--ink)] m-0">Añadir Inversión</h3>
+          <button onClick={onClose} className="text-[var(--text-soft)] hover:text-[var(--ink)] bg-transparent border-none text-[16px] cursor-pointer">×</button>
         </div>
 
-        {/* Cuerpo con Scroll interno */}
-        <div className="p-6 overflow-y-auto pb-10">
-          
-          <div className="mb-4">
-            <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Nombre del activo</label>
-            <input 
-              type="text" 
-              placeholder="Ej. Fondo Indexado, Bitcoin..."
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]"
-            />
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-[11px] text-[var(--text-soft)] mb-1 font-medium">Activo / Empresa / Criptomoneda</label>
+            <input type="text" placeholder="Ej. Bitcoin, S&P 500, Apple..." value={name} onChange={(e) => setName(e.target.value)} className="w-full p-2.5 rounded-[8px] border border-[var(--paper-line)] bg-[var(--paper)] text-[var(--ink)] text-[13px] outline-none focus:border-[var(--gold)]" />
           </div>
 
-          <div className="mb-4">
-            <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Tipo de activo / Categoría</label>
-            <select 
-              value={type} 
-              onChange={(e) => setType(e.target.value)}
-              className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]"
-            >
+          <div>
+            <label className="block text-[11px] text-[var(--text-soft)] mb-1 font-medium">Categoría</label>
+            <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-2.5 rounded-[8px] border border-[var(--paper-line)] bg-[var(--paper)] text-[var(--ink)] text-[13px] outline-none focus:border-[var(--gold)] cursor-pointer">
               <option value="Fondos Indexados">Fondos Indexados</option>
               <option value="Criptomonedas">Criptomonedas</option>
               <option value="Acciones">Acciones</option>
-              <option value="Planes de Pensiones">Planes de Pensiones</option>
+              <option value="ETFs">ETFs</option>
               <option value="Otros">Otros</option>
             </select>
           </div>
 
-          <div className="mb-4">
-            <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">¿Dónde está depositado? / Bróker</label>
-            <input 
-              type="text" 
-              placeholder="Ej. Trade Republic, MyInvestor..."
-              value={where} 
-              onChange={(e) => setWhere(e.target.value)}
-              className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]"
-            />
-          </div>
-
-          <div className="mb-5">
-            <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Fecha de compra</label>
-            <input 
-              type="date"
-              value={date} 
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)] [color-scheme:dark]"
-            />
-          </div>
-
-          <div className="bg-[rgba(244,197,99,0.02)] border border-[var(--paper-line)] rounded-[12px] p-4 mb-4">
-            <div className="mb-4">
-              <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Capital invertido (€)</label>
-              <input 
-                type="number" step="0.01" placeholder="0.00"
-                value={amount} 
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]"
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Precio de compra (€/ud)</label>
-              <input 
-                type="number" step="0.01" placeholder="0.00"
-                value={buyPrice} 
-                onChange={(e) => setBuyPrice(e.target.value)}
-                className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]"
-              />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] text-[var(--text-soft)] mb-1 font-medium">Bróker (opcional)</label>
+              <input type="text" placeholder="Ej. Degiro, MyInvestor..." value={broker} onChange={(e) => setBroker(e.target.value)} className="w-full p-2.5 rounded-[8px] border border-[var(--paper-line)] bg-[var(--paper)] text-[var(--ink)] text-[13px] outline-none focus:border-[var(--gold)]" />
             </div>
             <div>
-              <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Unidades obtenidas (Calculado)</label>
-              <input 
-                type="text" placeholder="Se calculará solo..." readOnly
-                value={qty}
-                className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[rgba(255,255,255,0.03)] text-[var(--text-soft)] text-[14px] outline-none cursor-not-allowed"
-              />
+              <label className="block text-[11px] text-[var(--text-soft)] mb-1 font-medium">Fecha</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2.5 rounded-[8px] border border-[var(--paper-line)] bg-[var(--paper)] text-[var(--ink)] text-[13px] outline-none focus:border-[var(--gold)] font-['IBM_Plex_Mono']" />
             </div>
           </div>
 
-          <div className="bg-[rgba(244,197,99,0.05)] border border-[rgba(244,197,99,0.15)] rounded-[12px] p-4 mb-6 flex items-center gap-3">
-            <input 
-              type="checkbox" id="chkInvRest"
-              checked={restFromBalance} 
-              onChange={(e) => setRestFromBalance(e.target.checked)}
-              className="w-4 h-4 accent-[var(--gold)] cursor-pointer shrink-0" 
-            />
-            <label htmlFor="chkInvRest" className="cursor-pointer text-[13px] font-semibold text-[var(--gold)]">
-              Restar del saldo en cuenta ahora
-            </label>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] text-[var(--text-soft)] mb-1 font-medium">Total invertido (€)</label>
+              <input type="number" step="any" placeholder="Ej. 100 o 1000" value={amountInvested} onChange={(e) => setAmountInvested(e.target.value)} className="w-full p-2.5 rounded-[8px] border border-[var(--paper-line)] bg-[var(--paper)] text-[var(--ink)] text-[13px] font-['IBM_Plex_Mono'] outline-none focus:border-[var(--gold)]" />
+            </div>
+            <div>
+              <label className="block text-[11px] text-[var(--text-soft)] mb-1 font-medium">Precio de compra (€/ud)</label>
+              <input type="number" step="any" placeholder="Ej. 50.00" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} className="w-full p-2.5 rounded-[8px] border border-[var(--paper-line)] bg-[var(--paper)] text-[var(--ink)] text-[13px] font-['IBM_Plex_Mono'] outline-none focus:border-[var(--gold)]" />
+            </div>
           </div>
 
-          <button 
-            onClick={handleSave}
-            className="w-full bg-[var(--gold)] text-[#0D0D12] font-semibold text-[14px] p-3 rounded-[10px] border-none cursor-pointer active:scale-95 transition-transform"
-          >
-            Crear y guardar activo
-          </button>
+          <div>
+            <label className="block text-[11px] text-[var(--text-soft)] mb-1 font-medium">Restar dinero de cuenta (opcional)</label>
+            <select value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)} className="w-full p-2.5 rounded-[8px] border border-[var(--paper-line)] bg-[var(--paper)] text-[var(--ink)] text-[13px] outline-none focus:border-[var(--gold)] cursor-pointer">
+              <option value="">No descontar de ninguna cuenta</option>
+              {accounts.map((acc: any) => (
+                <option key={acc.id} value={acc.id}>
+                  {acc.name} — {Number(acc.balance || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                </option>
+              ))}
+            </select>
+          </div>
 
-        </div>
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 bg-transparent border border-[var(--paper-line)] text-[var(--ink)] font-semibold text-[13px] p-2.5 rounded-[8px] cursor-pointer">Cancelar</button>
+            <button type="submit" className="flex-1 bg-[var(--gold)] text-[#0D0D12] font-semibold text-[13px] p-2.5 rounded-[8px] cursor-pointer border-none shadow-sm">Guardar</button>
+          </div>
+        </form>
       </div>
     </div>
   );

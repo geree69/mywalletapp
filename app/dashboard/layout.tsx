@@ -7,7 +7,7 @@ import { auth } from '../../lib/firebase';
 import Link from 'next/link';
 import { LayoutDashboard, Calendar, List, PiggyBank, TrendingUp } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import BalanceModal from '../components/BalanceModal'; // <-- Importamos tu nuevo modal
+import BalanceModal from '../components/BalanceModal';
 
 const fmt = (n: number) => {
   const v = Number(n) || 0;
@@ -19,7 +19,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const { user, state, loadingData } = useAppContext();
   
-  // Estado para controlar si el modal del saldo está abierto
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
 
   useEffect(() => {
@@ -36,6 +35,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (loadingData || !user) {
     return <div className="flex h-full items-center justify-center text-[var(--text-soft)] text-[14px]">Cargando tu libreta...</div>;
   }
+
+  // LA CURA DEFINITIVA DE ARQUITECTURA:
+  // Calculamos el dinero en tiempo real sumando las cuentas directamente.
+  const accounts = state.accounts || [];
+  const realGlobalBalance = accounts.reduce((sum: number, acc: any) => sum + Number(acc.balance || 0), 0);
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden">
@@ -54,9 +58,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <p className="text-[13px] text-[var(--gold)] m-0 mb-1 font-medium font-['Inter']">En cuenta ahora</p>
           <p 
             className="font-['IBM_Plex_Mono'] text-[36px] font-medium tracking-tight text-[var(--gold)] m-0 cursor-pointer hover:opacity-80 transition-opacity w-fit"
-            onClick={() => setIsBalanceModalOpen(true)} // <-- Al hacer clic, se abre
+            onClick={() => setIsBalanceModalOpen(true)}
           >
-            {fmt(state.balance)}
+            {fmt(realGlobalBalance)}
           </p>
         </div>
       </header>
@@ -75,7 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <NavItem href="/dashboard/inversion" icon={<TrendingUp size={22} />} label="Invers." active={pathname === '/dashboard/inversion'} />
       </nav>
 
-      {/* El Modal invisible esperando a ser abierto */}
+      {/* Modal para ajustar saldo manual por cuenta */}
       <BalanceModal isOpen={isBalanceModalOpen} onClose={() => setIsBalanceModalOpen(false)} />
     </div>
   );

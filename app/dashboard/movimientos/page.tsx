@@ -97,23 +97,33 @@ export default function MovimientosPage() {
     const newState = { ...state };
     
     const idToDelete = tx.originalId || tx.id;
-    newState.transactions = (state.transactions || []).filter((t: any) => t.id !== idToDelete);
     
-    let globalBalance = 0;
-    expandTxs(newState.transactions).forEach((t: any) => {
-      if (t.type === 'income') globalBalance += Number(t.amount || 0);
-      if (t.type === 'expense') globalBalance -= Number(t.amount || 0);
-    });
-    newState.balance = globalBalance;
+    // Devolvemos el dinero exacto a la cuenta real
+    const isExpense = tx.type === 'expense' || Number(tx.amount || 0) < 0;
+    const absAmount = Math.abs(Number(tx.amount || 0));
+    const amountToRestore = isExpense ? absAmount : -absAmount;
+
+    let updatedAccounts = [...accounts];
+    if (tx.accountId) {
+      updatedAccounts = updatedAccounts.map((acc: any) => {
+        if (acc.id === tx.accountId) {
+          return { ...acc, balance: Number(acc.balance || 0) + amountToRestore };
+        }
+        return acc;
+      });
+    }
+
+    newState.accounts = updatedAccounts;
+    newState.transactions = (state.transactions || []).filter((t: any) => t.id !== idToDelete);
+    newState.balance = updatedAccounts.reduce((sum: number, acc: any) => sum + Number(acc.balance || 0), 0);
 
     await saveState(newState);
   };
 
   return (
-    /* CONTENEDOR TAMAÑO MÓVIL: Altura acotada y posición relativa para albergar el scroll */
     <div className="flex flex-col h-[calc(100vh-140px)] max-h-[680px] relative overflow-hidden">
       
-      {/* CABECERA (Fija arriba sin moverse al hacer scroll) */}
+      {/* CABECERA */}
       <div className="shrink-0 mb-4">
         <h2 className="font-['Playfair_Display'] text-[20px] font-semibold m-0 mb-1 text-[var(--ink)] tracking-wide">
           Todos los Movimientos
@@ -132,7 +142,7 @@ export default function MovimientosPage() {
         />
       </div>
 
-      {/* ZONA DE DESPLAZAMIENTO (Aquí ocurre el scroll interno si el contenido es largo) */}
+      {/* ZONA DE DESPLAZAMIENTO */}
       <div className="flex-1 overflow-y-auto pr-1 pb-16 space-y-3">
         {sortedMonths.length > 0 ? (
           sortedMonths.map((monthKey, index) => {
@@ -141,7 +151,13 @@ export default function MovimientosPage() {
             const txsInMonth = groupedByMonth[monthKey];
 
             const isOpen = searchQuery.trim() ? true : (openMonths[monthKey] !== undefined ? openMonths[monthKey] : index === 0);
-            const totalMonth = txsInMonth.reduce((acc, t) => acc + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0);
+            
+            // CÁLCULO MES: Matemáticas reales sin duplicar signos
+            const totalMonth = txsInMonth.reduce((acc, t) => {
+              const isExpense = t.type === 'expense' || Number(t.amount || 0) < 0;
+              const absVal = Math.abs(Number(t.amount || 0));
+              return acc + (isExpense ? -absVal : absVal);
+            }, 0);
 
             return (
               <div key={monthKey} className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] overflow-hidden shadow-sm">
@@ -171,32 +187,37 @@ export default function MovimientosPage() {
 
                 {isOpen && (
                   <div className="px-3.5 pb-3 pt-1 border-t border-[var(--paper-line)] bg-[var(--paper)]">
-                    {txsInMonth.map((t: any) => (
-                      <div key={t.id} className="flex justify-between items-center py-2.5 border-b border-[var(--paper-line)] last:border-b-0 last:pb-0 first:pt-1">
-                        <div>
-                          <p className="text-[13px] font-medium text-[var(--ink)] m-0 mb-0.5">
-                            {t.title || t.category}
-                            {t.isRecurring && <span className="text-[var(--gold)] text-[9px] font-semibold border border-[var(--gold-l)] bg-[var(--gold-l)] px-1.5 py-0.2 rounded-[4px] ml-2 align-middle">Recurrente</span>}
-                          </p>
-                          <p className="text-[10px] text-[var(--text-soft)] m-0">
-                            {t.category} . {t.date} 
-                            {accounts.length > 1 && t.accountId && <span className="ml-1 text-[var(--gold)] opacity-80">({accounts.find((a:any)=>a.id===t.accountId)?.name || ''})</span>}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className={`font-['IBM_Plex_Mono'] text-[14px] font-medium ${t.type === 'income' ? 'text-[var(--teal-d)]' : 'text-[var(--coral)]'}`}>
-                            {t.type === 'income' ? '+' : '-'}{fmt(t.amount)}
+                    {txsInMonth.map((t: any) => {
+                      const isExpense = t.type === 'expense' || Number(t.amount || 0) < 0;
+                      const absAmount = Math.abs(Number(t.amount || 0));
+
+                      return (
+                        <div key={t.id} className="flex justify-between items-center py-2.5 border-b border-[var(--paper-line)] last:border-b-0 last:pb-0 first:pt-1">
+                          <div>
+                            <p className="text-[13px] font-medium text-[var(--ink)] m-0 mb-0.5">
+                              {t.title || t.category}
+                              {t.isRecurring && <span className="text-[var(--gold)] text-[9px] font-semibold border border-[var(--gold-l)] bg-[var(--gold-l)] px-1.5 py-0.2 rounded-[4px] ml-2 align-middle">Recurrente</span>}
+                            </p>
+                            <p className="text-[10px] text-[var(--text-soft)] m-0">
+                              {t.category} . {t.date} 
+                              {accounts.length > 1 && t.accountId && <span className="ml-1 text-[var(--gold)] opacity-80">({accounts.find((a:any)=>a.id===t.accountId)?.name || ''})</span>}
+                            </p>
                           </div>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); handleDeleteTx(t); }} 
-                            className="text-[18px] text-[var(--text-soft)] hover:text-[var(--coral)] bg-transparent border-none p-1 cursor-pointer transition-colors leading-none" 
-                            title="Borrar movimiento"
-                          >
-                            ×
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <div className={`font-['IBM_Plex_Mono'] text-[14px] font-medium ${isExpense ? 'text-[var(--coral)]' : 'text-[var(--teal-d)]'}`}>
+                              {isExpense ? '-' : '+'}{fmt(absAmount)}
+                            </div>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleDeleteTx(t); }} 
+                              className="text-[18px] text-[var(--text-soft)] hover:text-[var(--coral)] bg-transparent border-none p-1 cursor-pointer transition-colors leading-none" 
+                              title="Borrar movimiento"
+                            >
+                              ×
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -209,11 +230,11 @@ export default function MovimientosPage() {
         )}
       </div>
 
-      {/* BOTÓN FLOTANTE (Anclado abajo a la derecha DENTRO de la pantalla de móvil) */}
+      {/* BOTÓN FLOTANTE */}
       <div className="absolute bottom-3 right-3 z-50">
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="w-13 h-13 w-12 h-12 bg-[var(--gold)] text-[#0D0D12] rounded-full flex items-center justify-center text-[28px] font-light shadow-[0_4px_12px_rgba(244,197,99,0.5)] active:scale-90 transition-transform cursor-pointer border-none"
+          className="w-12 h-12 bg-[var(--gold)] text-[#0D0D12] rounded-full flex items-center justify-center text-[28px] font-light shadow-[0_4px_12px_rgba(244,197,99,0.5)] active:scale-90 transition-transform cursor-pointer border-none"
         >
           +
         </button>
