@@ -1,9 +1,9 @@
-import "./globals.css";
-import { AppProvider } from "./context/AppContext";
+import './globals.css';
+import { AppProvider } from './context/AppContext';
 
 export const metadata = {
-  title: "Financial Care",
-  description: "Contabilidad personal",
+  title: 'MyWalletApp',
+  description: 'Tu gestor financiero personal',
 };
 
 export default function RootLayout({
@@ -12,13 +12,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
-      <body>
-        <div className="w-full max-w-[420px] bg-[var(--paper)] rounded-[24px] overflow-hidden flex flex-col relative border border-[var(--paper-line)] shadow-2xl my-6 min-h-[780px]">
-          <AppProvider>
-            {children}
-          </AppProvider>
-        </div>
+    <html lang="es" className="h-full">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link 
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" 
+          rel="stylesheet" 
+        />
+      </head>
+      <body className="bg-[#08080c] text-[#F3F3F6] h-full overflow-hidden flex items-center justify-center antialiased m-0">
+        <AppProvider>
+          {children}
+        </AppProvider>
       </body>
     </html>
   );

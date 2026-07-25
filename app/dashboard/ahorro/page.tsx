@@ -4,168 +4,145 @@ import { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 
 const fmt = (n: number) => {
-  return (Number(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
-};
-
-const expandTxs = (txs: any[]) => {
-  const expanded: any[] = [];
-  const todayStr = new Date().toISOString().split('T')[0];
-
-  txs.forEach((t) => {
-    if (!t.isRecurring) {
-      expanded.push(t);
-    } else {
-      const [tY, tM, tD] = (t.date || '').split('-').map(Number);
-      if (!tY) { expanded.push(t); return; }
-
-      let currY = tY;
-      let currM = tM;
-
-      while (true) {
-        const instanceDate = `${currY}-${String(currM).padStart(2, '0')}-${String(tD).padStart(2, '0')}`;
-        if (instanceDate > todayStr) break;
-        expanded.push({ ...t, date: instanceDate });
-        currM++;
-        if (currM > 12) { currM = 1; currY++; }
-      }
-    }
-  });
-  return expanded;
+  const v = Number(n) || 0;
+  return v.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 };
 
 export default function AhorroPage() {
   const { state, saveState } = useAppContext();
-  
   const accounts = state.accounts || [];
-  const transactions = expandTxs(state.transactions || []);
 
-  const savingsAccounts = accounts.filter((acc: any) => acc.type === 'savings');
+  // Filtrar exclusivamente cuentas de ahorro o ambas
+  const savingsAccounts = accounts.filter(
+    (acc: any) => acc.type === 'ahorro' || acc.type === 'ambas'
+  );
 
-  const accountsWithBalance = savingsAccounts.map((acc: any) => {
-    let realBalance = 0;
-    transactions.forEach((t: any) => {
-      const tAccId = t.accountId || (accounts.length > 0 ? accounts[0].id : '');
-      if (tAccId === acc.id) {
-        if (t.type === 'income') realBalance += Number(t.amount || 0);
-        if (t.type === 'expense') realBalance -= Number(t.amount || 0);
+  const [editingTaeId, setEditingTaeId] = useState<string | null>(null);
+  const [taeValue, setTaeValue] = useState<string>('');
+
+  const handleSaveTae = async (accountId: string) => {
+    const updatedAccounts = accounts.map((acc: any) => {
+      if (acc.id === accountId) {
+        return { ...acc, tae: Number(taeValue) || 0 };
       }
+      return acc;
     });
-    return { ...acc, computedBalance: realBalance };
-  });
 
-  const totalSavings = accountsWithBalance.reduce((sum: number, a: any) => sum + a.computedBalance, 0);
-  
-  // Cálculo neto aplicando el 19% de retención fiscal estándar sobre los intereses brutos
-  const totalAnnualNet = accountsWithBalance.reduce((sum: number, a: any) => {
-    const tae = a.tae || 0;
-    const gross = a.computedBalance * (tae / 100);
-    return sum + (gross * 0.81); // 81% restante tras retener el 19% de IRPF
-  }, 0);
-  const totalMonthlyNet = totalAnnualNet / 12;
+    const newState = {
+      ...state,
+      accounts: updatedAccounts,
+    };
 
-  const handleUpdateTae = async (accId: string, newTae: string) => {
-    const taeVal = parseFloat(newTae) || 0;
-    const updatedAccounts = accounts.map((acc: any) => 
-      acc.id === accId ? { ...acc, tae: taeVal } : acc
-    );
-    await saveState({ ...state, accounts: updatedAccounts });
+    await saveState(newState);
+    setEditingTaeId(null);
+    setTaeValue('');
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] max-h-[680px] relative overflow-hidden">
-      
-      {/* CABECERA FIJA */}
-      <div className="shrink-0 mb-3">
+    <div className="flex flex-col space-y-4 pb-6">
+      <div>
         <h2 className="font-['Playfair_Display'] text-[20px] font-semibold m-0 mb-1 text-[var(--ink)] tracking-wide">
-          Rendimiento y Ahorro
+          Ahorro y TAE
         </h2>
         <p className="text-[12px] text-[var(--text-soft)] m-0 leading-relaxed">
-          Controla la rentabilidad TAE y las ganancias netas (aplicando un 19% de retención fiscal).
+          Gestiona tus cuentas de ahorro y configura su rentabilidad anual (TAE).
         </p>
       </div>
 
-      {/* CONTENIDO CON SCROLL INTERNO */}
-      <div className="flex-1 overflow-y-auto pr-1 pb-16 space-y-4">
-        
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-3.5">
-            <p className="text-[11px] text-[var(--text-soft)] m-0 mb-1 font-medium">Patrimonio en Ahorro</p>
-            <p className="font-['IBM_Plex_Mono'] text-[16px] font-medium text-[var(--teal-d)]">
-              {fmt(totalSavings)}
-            </p>
-          </div>
-          <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-3.5">
-            <p className="text-[11px] text-[var(--text-soft)] m-0 mb-1 font-medium">Ganancia Anual Neta</p>
-            <p className="font-['IBM_Plex_Mono'] text-[16px] font-medium text-[var(--ink)]">
-              +{fmt(totalAnnualNet)}
-            </p>
-          </div>
+      {savingsAccounts.length === 0 ? (
+        <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-6 text-center text-[var(--text-soft)] text-[13px]">
+          No tienes cuentas de ahorro registradas. Crea una cuenta nueva desde el apartado de Resumen seleccionando el tipo "Ahorro" o "Ambas".
         </div>
+      ) : (
+        <div className="space-y-3">
+          {savingsAccounts.map((acc: any) => {
+            const balance = Number(acc.balance || 0);
+            const tae = Number(acc.tae || 0);
+            const estimatedAnnualReturn = (balance * tae) / 100;
 
-        <div className="bg-gradient-to-br from-[var(--paper-2)] to-[var(--paper)] border border-[var(--paper-line)] rounded-[var(--radius)] p-4 shadow-sm flex justify-between items-center">
-          <div>
-            <p className="text-[11px] text-[var(--text-soft)] m-0 mb-1 font-medium uppercase tracking-wider">Rendimiento mensual neto estimado</p>
-            <p className="font-['IBM_Plex_Mono'] text-[18px] font-medium text-[var(--teal-d)] m-0">+{fmt(totalMonthlyNet)} <span className="text-[12px] text-[var(--text-soft)]">/ mes</span></p>
-          </div>
-        </div>
-
-        <div>
-          <h3 className="font-['Playfair_Display'] text-[16px] font-semibold m-0 mb-2.5 text-[var(--ink)] tracking-wide">
-            Cuentas de ahorro y TAE (Neto)
-          </h3>
-          <div className="space-y-3">
-            {accountsWithBalance.length > 0 ? (
-              accountsWithBalance.map((acc: any) => {
-                const annualGross = acc.computedBalance * ((acc.tae || 0) / 100);
-                const annualNet = annualGross * 0.81; // Neto tras el 19% de impuestos
-                const monthlyNet = annualNet / 12;
-
-                return (
-                  <div key={acc.id} className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-4 space-y-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <span className="font-semibold text-[15px] text-[var(--ink)]">{acc.name}</span>
-                        <p className="text-[12px] text-[var(--text-soft)] m-0 mt-0.5 font-['IBM_Plex_Mono']">
-                          Saldo actual: <span className="text-[var(--ink)] font-medium">{fmt(acc.computedBalance)}</span>
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[11px] text-[var(--teal-d)] font-medium font-['IBM_Plex_Mono'] block">
-                          +{fmt(annualNet)} / año (neto)
-                        </span>
-                        <span className="text-[10px] text-[var(--text-soft)] font-['IBM_Plex_Mono']">
-                          (+{fmt(monthlyNet)} / mes)
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-[var(--paper-line)]">
-                      <label className="text-[11px] text-[var(--text-soft)] font-medium">Interés TAE aplicable (%):</label>
-                      <div className="flex items-center gap-1.5">
-                        <input 
-                          type="number" 
-                          step="0.01" 
-                          value={acc.tae !== undefined ? acc.tae : 2.5} 
-                          onChange={(e) => handleUpdateTae(acc.id, e.target.value)}
-                          className="w-20 p-1.5 text-right rounded-[8px] border border-[var(--paper-line)] bg-[var(--paper)] text-[var(--ink)] text-[13px] font-['IBM_Plex_Mono'] outline-none focus:border-[var(--gold)]"
-                        />
-                        <span className="text-[13px] text-[var(--text-soft)] font-medium">%</span>
-                      </div>
-                    </div>
+            return (
+              <div 
+                key={acc.id} 
+                className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-4 space-y-3 shadow-sm"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-semibold text-[14px] text-[var(--ink)] m-0">{acc.name}</p>
+                    <p className="text-[10px] text-[var(--text-soft)] uppercase m-0 mt-0.5">
+                      {acc.type === 'ahorro' ? 'Cuenta de Ahorro' : 'Día a día y Ahorro'}
+                    </p>
                   </div>
-                );
-              })
-            ) : (
-               <div className="text-center py-6 text-[var(--text-soft)] text-[12px] bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)]">
-                 No tienes ninguna cuenta de tipo "Ahorro" creada.<br/>
-                 <span className="text-[var(--gold)]">Ve al apartado de Cuentas para crear una.</span>
-               </div>
-            )}
-          </div>
+                  <p className="font-['IBM_Plex_Mono'] text-[16px] font-semibold text-[var(--gold)] m-0">
+                    {fmt(balance)}
+                  </p>
+                </div>
+
+                <div className="border-t border-[var(--paper-line)] pt-3 flex justify-between items-center">
+                  <div>
+                    <p className="text-[11px] text-[var(--text-soft)] m-0">Rentabilidad TAE</p>
+                    {editingTaeId === acc.id ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          placeholder="Ej: 2.5"
+                          value={taeValue}
+                          onChange={(e) => setTaeValue(e.target.value)}
+                          className="w-20 p-1.5 rounded-[6px] border border-[var(--gold)] bg-[var(--paper)] text-[var(--ink)] text-[12px] outline-none font-['IBM_Plex_Mono']"
+                        />
+                        <button 
+                          onClick={() => handleSaveTae(acc.id)}
+                          className="px-2.5 py-1.5 bg-[var(--gold)] text-[#0D0D12] rounded-[6px] font-semibold text-[11px] border-none cursor-pointer"
+                        >
+                          Guardar
+                        </button>
+                        <button 
+                          onClick={() => setEditingTaeId(null)}
+                          className="px-2 py-1.5 text-[var(--text-soft)] bg-transparent border-none text-[11px] cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {tae > 0 ? (
+                          <>
+                            <span className="font-['IBM_Plex_Mono'] text-[13px] font-medium text-[var(--ink)]">
+                              {tae}% TAE
+                            </span>
+                            <button 
+                              onClick={() => { setEditingTaeId(acc.id); setTaeValue(tae.toString()); }}
+                              className="text-[11px] text-[var(--gold)] bg-transparent border-none cursor-pointer hover:underline p-0"
+                            >
+                              Editar
+                            </button>
+                          </>
+                        ) : (
+                          <button 
+                            onClick={() => { setEditingTaeId(acc.id); setTaeValue(''); }}
+                            className="text-[13px] font-medium text-[var(--gold)] bg-transparent border-none cursor-pointer hover:underline p-0 font-['IBM_Plex_Mono']"
+                          >
+                            Añadir TAE
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {tae > 0 && (
+                    <div className="text-right">
+                      <p className="text-[10px] text-[var(--text-soft)] m-0">Estimado anual</p>
+                      <p className="font-['IBM_Plex_Mono'] text-[12px] font-medium text-[var(--teal-d)] m-0">
+                        +{fmt(estimatedAnnualReturn)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
-
-      </div>
-
+      )}
     </div>
   );
 }

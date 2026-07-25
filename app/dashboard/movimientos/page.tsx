@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import TransactionModal from '../../components/TransactionModal';
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -11,7 +10,6 @@ const MONTH_NAMES = [
 
 const fmt = (n: number) => (Number(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 
-// EL MOTOR DEL TIEMPO
 const expandTxs = (txs: any[]) => {
   const expanded: any[] = [];
   const todayStr = new Date().toISOString().split('T')[0];
@@ -49,7 +47,6 @@ const expandTxs = (txs: any[]) => {
 
 export default function MovimientosPage() {
   const { state, saveState } = useAppContext();
-  const [isModalOpen, setIsModalOpen] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
@@ -98,7 +95,6 @@ export default function MovimientosPage() {
     
     const idToDelete = tx.originalId || tx.id;
     
-    // Devolvemos el dinero exacto a la cuenta real
     const isExpense = tx.type === 'expense' || Number(tx.amount || 0) < 0;
     const absAmount = Math.abs(Number(tx.amount || 0));
     const amountToRestore = isExpense ? absAmount : -absAmount;
@@ -121,10 +117,8 @@ export default function MovimientosPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] max-h-[680px] relative overflow-hidden">
-      
-      {/* CABECERA */}
-      <div className="shrink-0 mb-4">
+    <div className="flex flex-col space-y-4">
+      <div>
         <h2 className="font-['Playfair_Display'] text-[20px] font-semibold m-0 mb-1 text-[var(--ink)] tracking-wide">
           Todos los Movimientos
         </h2>
@@ -132,7 +126,6 @@ export default function MovimientosPage() {
           Historial ordenado por meses y filtrable por categoría.
         </p>
 
-        {/* BARRA DE BÚSQUEDA */}
         <input 
           type="text"
           placeholder="Buscar por categoría o concepto..."
@@ -142,8 +135,7 @@ export default function MovimientosPage() {
         />
       </div>
 
-      {/* ZONA DE DESPLAZAMIENTO */}
-      <div className="flex-1 overflow-y-auto pr-1 pb-16 space-y-3">
+      <div className="space-y-3">
         {sortedMonths.length > 0 ? (
           sortedMonths.map((monthKey, index) => {
             const [year, month] = monthKey.split('-');
@@ -152,7 +144,6 @@ export default function MovimientosPage() {
 
             const isOpen = searchQuery.trim() ? true : (openMonths[monthKey] !== undefined ? openMonths[monthKey] : index === 0);
             
-            // CÁLCULO MES: Matemáticas reales sin duplicar signos
             const totalMonth = txsInMonth.reduce((acc, t) => {
               const isExpense = t.type === 'expense' || Number(t.amount || 0) < 0;
               const absVal = Math.abs(Number(t.amount || 0));
@@ -199,7 +190,7 @@ export default function MovimientosPage() {
                               {t.isRecurring && <span className="text-[var(--gold)] text-[9px] font-semibold border border-[var(--gold-l)] bg-[var(--gold-l)] px-1.5 py-0.2 rounded-[4px] ml-2 align-middle">Recurrente</span>}
                             </p>
                             <p className="text-[10px] text-[var(--text-soft)] m-0">
-                              {t.category} . {t.date} 
+                              {t.category} · {t.date} 
                               {accounts.length > 1 && t.accountId && <span className="ml-1 text-[var(--gold)] opacity-80">({accounts.find((a:any)=>a.id===t.accountId)?.name || ''})</span>}
                             </p>
                           </div>
@@ -229,21 +220,6 @@ export default function MovimientosPage() {
           </div>
         )}
       </div>
-
-      {/* BOTÓN FLOTANTE */}
-      <div className="absolute bottom-3 right-3 z-50">
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="w-12 h-12 bg-[var(--gold)] text-[#0D0D12] rounded-full flex items-center justify-center text-[28px] font-light shadow-[0_4px_12px_rgba(244,197,99,0.5)] active:scale-90 transition-transform cursor-pointer border-none"
-        >
-          +
-        </button>
-      </div>
-
-      <TransactionModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-      />
     </div>
   );
 }
