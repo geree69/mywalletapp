@@ -1,8 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import BalanceModal from '../components/BalanceModal';
+
+const MONTH_NAMES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
 
 const fmt = (n: number) => {
   const v = Number(n) || 0;
@@ -25,8 +30,64 @@ export default function ResumenPage() {
   const [editingAccount, setEditingAccount] = useState<any>(null);
 
   const accounts = state.accounts || [];
-  const transactions = state.transactions || [];
   const totalBalance = accounts.reduce((sum: number, acc: any) => sum + Number(acc.balance || 0), 0);
+
+  // === ORDENAR ACTIVIDAD RECIENTE POR FECHA (MÁS RECIENTE PRIMERO) ===
+  const sortedTransactions = useMemo(() => {
+    return [...(state.transactions || [])].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }, [state.transactions]);
+
+  // === LÓGICA DEL PRESUPUESTO DEL MES ACTUAL ===
+  const { currentMonthExpense, currentMonthIncome, remainingBudget, effectiveMonthlyBudget, spentPct, monthName, isOverBudget } = useMemo(() => {
+    const d = new Date();
+    const currentMonthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const mName = MONTH_NAMES[d.getMonth()];
+
+    // Presupuesto base mensual
+    const annualBudget = Number(state.annualBudget || 0);
+    const baseMonthly = annualBudget / 12;
+
+    let expense = 0;
+    let splitIncome = 0;
+    let regularIncome = 0;
+
+    (state.transactions || []).forEach((t: any) => {
+      const tKey = (t.date && t.date.length >= 7) ? t.date.slice(0, 7) : '';
+
+      // Mirar si hay algún ingreso repartido que aplique a este mes
+      if (t.split && Array.isArray(t.splitDetail)) {
+        const entry = t.splitDetail.find((detail: any) => detail.key === currentMonthKey);
+        if (entry && t.type === 'income') {
+          splitIncome += entry.amount;
+        }
+      } else if (tKey === currentMonthKey && t.type === 'income') {
+        // Ingreso normal (no repartido) de este mes
+        regularIncome += Number(t.amount || 0);
+      }
+
+      // Sumar los gastos de este mes
+      if (tKey === currentMonthKey && t.type === 'expense') {
+        expense += Math.abs(Number(t.amount || 0));
+      }
+    });
+
+    const currentIncome = regularIncome + splitIncome;
+    const effective = baseMonthly + splitIncome;
+    const remaining = effective - expense;
+    const over = expense > effective;
+    const pct = effective > 0 ? Math.min(100, (expense / effective) * 100) : 0;
+
+    return {
+      currentMonthExpense: expense,
+      currentMonthIncome: currentIncome,
+      remainingBudget: remaining,
+      effectiveMonthlyBudget: effective,
+      spentPct: pct,
+      monthName: mName,
+      isOverBudget: over
+    };
+  }, [state.transactions, state.annualBudget]);
+  // =============================================
 
   const handleDeleteAccount = async (id: string) => {
     if (!confirm('¿Seguro que quieres borrar esta cuenta de forma permanente?')) return;
@@ -40,9 +101,27 @@ export default function ResumenPage() {
     });
   };
 
+  // NUEVO: Botón de emergencia para vaciar la app por completo si se queda algún dato residual
+  const handleResetApp = async () => {
+    if (!confirm('¿Seguro que quieres reiniciar todos los datos y dejar la aplicación como el primer día? Se borrará todo el historial.')) return;
+    
+    await saveState({
+      transactions: [],
+      accounts: [],
+      investments: [],
+      soldInvestments: [],
+      annualBudget: 0,
+      balance: 0,
+      budgetStartMonth: ''
+    });
+
+    window.location.reload();
+  };
+
   return (
-    <div className="flex flex-col space-y-4">
+    <div className="flex flex-col space-y-4 pb-10">
       
+      {/* Tarjeta de Patrimonio Total */}
       <div 
         onClick={() => setIsBalanceModalOpen(true)}
         className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-4 cursor-pointer hover:border-[var(--gold)] transition-colors shadow-sm"
@@ -54,13 +133,53 @@ export default function ResumenPage() {
         <p className="text-[10px] text-[var(--text-soft)] m-0 mt-2">Haz clic para crear una nueva cuenta</p>
       </div>
 
+      {/* Tarjeta: Resumen Mensual */}
+      <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-4 shadow-sm">
+        <div className="flex justify-between items-start mb-3">
+          <div>
+            <p className="text-[11px] text-[var(--text-soft)] m-0 mb-1 font-medium uppercase tracking-wider">
+              Presupuesto de {monthName}
+            </p>
+            <p className={`text-[20px] font-semibold m-0 ${isOverBudget ? 'text-[var(--coral)]' : 'text-[var(--ink)]'}`}>
+              {isOverBudget ? `-${fmt(Math.abs(remainingBudget))}` : fmt(remainingBudget)} 
+              <span className="text-[12px] font-normal text-[var(--text-soft)] ml-1.5">
+                {isOverBudget ? 'excedidos' : 'disponibles'}
+              </span>
+            </p>
+          </div>
+          <div className="text-right flex flex-col gap-2">
+            <div>
+              <p className="text-[10px] text-[var(--text-soft)] m-0 mb-0.5">Ingresado</p>
+              <p className="text-[13px] font-medium text-[var(--teal-d)] m-0">
+                +{fmt(currentMonthIncome)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[var(--text-soft)] m-0 mb-0.5">Gastado</p>
+              <p className={`text-[13px] font-medium m-0 ${isOverBudget ? 'text-[var(--coral)]' : 'text-[var(--ink)]'}`}>
+                {fmt(currentMonthExpense)} <span className="text-[11px] text-[var(--text-soft)]">/ {fmt(effectiveMonthlyBudget)}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Barra de progreso */}
+        <div className="w-full h-1.5 bg-[#2A2A38] rounded-full overflow-hidden relative mt-1">
+          <div 
+            className={`h-full rounded-full transition-all duration-500 ${isOverBudget ? 'bg-[var(--coral)]' : 'bg-[var(--teal-d)]'}`}
+            style={{ width: `${spentPct}%` }}
+          ></div>
+        </div>
+      </div>
+
+      {/* Lista de Cuentas */}
       <div>
         <h3 className="font-['Playfair_Display'] text-[16px] font-semibold m-0 mb-2.5 text-[var(--ink)]">
           Tus Cuentas
         </h3>
         {accounts.length === 0 ? (
           <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-5 text-center text-[var(--text-soft)] text-[12px]">
-            No tienes cuentas creadas. Pulsa el botón de abajo para añadir una.
+            No tienes cuentas creadas. Pulsa el recuadro superior para añadir una.
           </div>
         ) : (
           <div className="space-y-2">
@@ -75,7 +194,6 @@ export default function ResumenPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {/* Botones sutiles alineados a la izquierda del saldo */}
                   <div className="flex items-center gap-1">
                     <button 
                       onClick={() => setEditingAccount(acc)}
@@ -93,7 +211,6 @@ export default function ResumenPage() {
                     </button>
                   </div>
                   
-                  {/* Saldo a la derecha del todo */}
                   <p className="text-[14px] font-semibold text-[var(--ink)] m-0 min-w-[70px] text-right">
                     {fmt(acc.balance)}
                   </p>
@@ -105,17 +222,18 @@ export default function ResumenPage() {
         )}
       </div>
 
+      {/* Actividad Reciente */}
       <div>
         <h3 className="font-['Playfair_Display'] text-[16px] font-semibold m-0 mb-2.5 text-[var(--ink)]">
           Actividad Reciente
         </h3>
-        {transactions.length === 0 ? (
+        {sortedTransactions.length === 0 ? (
           <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-5 text-center text-[var(--text-soft)] text-[12px]">
             Sin movimientos recientes.
           </div>
         ) : (
           <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-3.5 space-y-3">
-            {transactions.slice(0, 5).map((t: any) => {
+            {sortedTransactions.slice(0, 5).map((t: any) => {
               const isExpense = t.type === 'expense' || Number(t.amount || 0) < 0;
               const absAmount = Math.abs(Number(t.amount || 0));
               return (
@@ -132,6 +250,16 @@ export default function ResumenPage() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Botón de Limpieza Total / Reset */}
+      <div className="pt-2 text-center">
+        <button 
+          onClick={handleResetApp}
+          className="text-[11px] text-[var(--text-soft)] hover:text-[var(--coral)] bg-transparent border border-[var(--paper-line)] rounded-[8px] py-2 px-4 cursor-pointer transition-colors"
+        >
+          Reiniciar aplicación por completo (Limpiar todo)
+        </button>
       </div>
 
       {/* Modal para Crear Cuenta nueva */}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import TransactionModal from '../../components/TransactionModal';
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -50,6 +51,7 @@ export default function MovimientosPage() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
+  const [editingTx, setEditingTx] = useState<any>(null);
 
   const accounts = state.accounts || [];
 
@@ -127,11 +129,11 @@ export default function MovimientosPage() {
         </p>
 
         <input 
-          type="text"
-          placeholder="Buscar por categoría o concepto..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full p-2.5 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[13px] outline-none focus:border-[var(--gold)]"
+          type="text" 
+          placeholder="Buscar por categoría o concepto..." 
+          value={searchQuery} 
+          onChange={(e) => setSearchQuery(e.target.value)} 
+          className="w-full p-2.5 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[13px] outline-none focus:border-[var(--gold)]" 
         />
       </div>
 
@@ -154,7 +156,7 @@ export default function MovimientosPage() {
               <div key={monthKey} className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] overflow-hidden shadow-sm">
                 
                 <div 
-                  onClick={() => toggleMonth(monthKey)}
+                  onClick={() => toggleMonth(monthKey)} 
                   className="p-3.5 flex justify-between items-center cursor-pointer select-none hover:bg-[rgba(244,197,99,0.05)] transition-colors"
                 >
                   <div className="flex items-center gap-2.5">
@@ -198,13 +200,26 @@ export default function MovimientosPage() {
                             <div className={`font-['IBM_Plex_Mono'] text-[14px] font-medium ${isExpense ? 'text-[var(--coral)]' : 'text-[var(--teal-d)]'}`}>
                               {isExpense ? '-' : '+'}{fmt(absAmount)}
                             </div>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleDeleteTx(t); }} 
-                              className="text-[18px] text-[var(--text-soft)] hover:text-[var(--coral)] bg-transparent border-none p-1 cursor-pointer transition-colors leading-none" 
-                              title="Borrar movimiento"
-                            >
-                              ×
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  const realTx = (state.transactions || []).find((raw: any) => raw.id === (t.originalId || t.id)) || t;
+                                  setEditingTx(realTx); 
+                                }} 
+                                className="text-[11px] font-medium text-[var(--text-soft)] hover:text-[var(--gold)] bg-transparent border-none cursor-pointer px-1.5 py-1 transition-colors" 
+                                title="Editar movimiento"
+                              >
+                                Editar
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleDeleteTx(t); }} 
+                                className="text-[18px] text-[var(--text-soft)] hover:text-[var(--coral)] bg-transparent border-none p-1 cursor-pointer transition-colors leading-none" 
+                                title="Borrar movimiento"
+                              >
+                                ×
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -220,6 +235,13 @@ export default function MovimientosPage() {
           </div>
         )}
       </div>
+
+      {/* Modal para Editar Movimiento */}
+      <TransactionModal 
+        isOpen={!!editingTx} 
+        onClose={() => setEditingTx(null)} 
+        editItem={editingTx} 
+      />
     </div>
   );
 }

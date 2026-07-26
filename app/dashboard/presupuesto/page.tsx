@@ -15,7 +15,7 @@ export default function PresupuestoPage() {
   const { state } = useAppContext();
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
 
-  const { budgetMonths, totalEffectiveYear, totalSplitIncome } = useMemo(() => {
+  const { budgetMonths, totalEffectiveYear, totalSplitIncome, totalExpenseYear } = useMemo(() => {
     const annual = Number(state.annualBudget || 0);
     const monthly = annual / 12;
     
@@ -28,6 +28,7 @@ export default function PresupuestoPage() {
     let [y, m] = startKey.split('-').map(Number);
     let generatedMonths = [];
     let tSplitIncome = 0;
+    let tExpense = 0; // Sumador para el gasto de todo el año
 
     for (let i = 0; i < 12; i++) {
       let date = new Date(y, m - 1 + i, 1);
@@ -50,12 +51,14 @@ export default function PresupuestoPage() {
         const tKey = (t.date && t.date.length >= 7) ? t.date.slice(0, 7) : 'sin-fecha';
         if (tKey === key) {
           if (t.type === 'expense') {
-            expense += t.amount;
+            expense += Math.abs(Number(t.amount || 0)); // Aseguramos que se sume en positivo
           }
         }
       });
 
       tSplitIncome += income;
+      tExpense += expense; 
+      
       const effectiveBudget = monthly + income;
       const pct = effectiveBudget > 0 ? Math.min(100, (expense / effectiveBudget) * 100) : 0;
       const over = effectiveBudget > 0 && expense > effectiveBudget;
@@ -73,9 +76,14 @@ export default function PresupuestoPage() {
     return {
       budgetMonths: generatedMonths,
       totalEffectiveYear: annual + tSplitIncome,
-      totalSplitIncome: tSplitIncome
+      totalSplitIncome: tSplitIncome,
+      totalExpenseYear: tExpense 
     };
   }, [state]);
+
+  // Cálculos para la barra de progreso anual
+  const yearSpentPct = totalEffectiveYear > 0 ? Math.min(100, (totalExpenseYear / totalEffectiveYear) * 100) : 0;
+  const isYearOverBudget = totalEffectiveYear > 0 && totalExpenseYear > totalEffectiveYear;
 
   return (
     <div className="relative min-h-full pb-16">
@@ -87,29 +95,54 @@ export default function PresupuestoPage() {
       </p>
 
       {/* Tarjeta de Presupuesto Global */}
-      <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-4 mb-4">
-        <p className="text-[12px] text-[var(--text-soft)] m-0 mb-1.5 font-medium">Presupuesto total efectivo (12 meses)</p>
-        <p 
-          className="font-['IBM_Plex_Mono'] text-[28px] font-medium text-[var(--gold)] cursor-pointer hover:opacity-80 transition-opacity"
-          onClick={() => setIsBudgetModalOpen(true)}
-        >
-          {fmt(totalEffectiveYear)}
-        </p>
-        <p className="text-[12px] text-[var(--text-soft)] m-0 mt-2 font-medium">
-          Media: {fmt(totalEffectiveYear / 12)} al mes
-        </p>
+      <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-4 mb-4 shadow-sm">
+        
+        <div className="flex justify-between items-end">
+          <div>
+            <p className="text-[12px] text-[var(--text-soft)] m-0 mb-1.5 font-medium">Presupuesto anual</p>
+            <p 
+              className="font-['IBM_Plex_Mono'] text-[28px] font-medium text-[var(--gold)] cursor-pointer hover:opacity-80 transition-opacity m-0"
+              onClick={() => setIsBudgetModalOpen(true)}
+              title="Click para editar presupuesto base"
+            >
+              {fmt(totalEffectiveYear)}
+            </p>
+          </div>
+          
+          <div className="text-right">
+            <p className="text-[11px] text-[var(--text-soft)] m-0 mb-1 font-medium">Llevas gastado</p>
+            <p className={`font-['IBM_Plex_Mono'] text-[18px] font-medium m-0 ${isYearOverBudget ? 'text-[var(--coral)]' : 'text-[var(--ink)]'}`}>
+              {fmt(totalExpenseYear)}
+            </p>
+          </div>
+        </div>
+        
+        {/* Barra de progreso anual */}
+        <div className="w-full h-1.5 bg-[#2A2A38] rounded-full overflow-hidden relative mt-4">
+          <div 
+            className={`h-full rounded-full transition-all duration-500 ${isYearOverBudget ? 'bg-[var(--coral)]' : 'bg-[var(--teal-d)]'}`}
+            style={{ width: `${yearSpentPct}%` }}
+          ></div>
+        </div>
+
+        <div className="flex justify-between text-[11px] text-[var(--text-soft)] mt-2 font-medium">
+          <span>Media: {fmt(totalEffectiveYear / 12)} al mes</span>
+          <span className={isYearOverBudget ? 'text-[var(--coral)]' : ''}>
+            {yearSpentPct.toFixed(1)}% consumido
+          </span>
+        </div>
 
         {totalSplitIncome > 0 && (
-          <>
-            <div className="flex justify-between text-[13px] text-[var(--text-soft)] mt-3 pt-3 border-t border-dashed border-[var(--paper-line)]">
+          <div className="mt-4 pt-3 border-t border-dashed border-[var(--paper-line)]">
+            <div className="flex justify-between text-[12px] text-[var(--text-soft)]">
               <span>Base configurada:</span>
               <span className="font-['IBM_Plex_Mono']">{fmt(state.annualBudget)}</span>
             </div>
-            <div className="flex justify-between text-[13px] text-[var(--teal-d)] mt-1.5">
+            <div className="flex justify-between text-[12px] text-[var(--teal-d)] mt-1.5">
               <span>Ingresos repartidos:</span>
               <span className="font-['IBM_Plex_Mono']">+{fmt(totalSplitIncome)}</span>
             </div>
-          </>
+          </div>
         )}
       </div>
 
