@@ -41,12 +41,16 @@ export async function POST(req: Request) {
       });
     }
 
-    // 🔴 AQUÍ ESTABA EL ERROR: Ahora pasamos la clave directamente en la URL como dicta Google.
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // Quitamos la clave de la URL para que Google no se confunda
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
 
     const apiResponse = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        // 🔴 LA ENVIAMOS POR AQUÍ: Esta es la forma oficial y a prueba de balas
+        'x-goog-api-key': apiKey 
+      },
       body: JSON.stringify({
         contents: [{ parts }],
         generationConfig: { responseMimeType: 'application/json' }
