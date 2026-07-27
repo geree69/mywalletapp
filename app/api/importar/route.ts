@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    // Clave metida directamente para evitar problemas con Vercel
-    const apiKey = "AQ.Ab8RN6LMXIdeCVD8F5qRiW5W5MBzb2Y-PZtyleUV9Qjja6GFA";
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'La variable GEMINI_API_KEY no está configurada en el entorno.' },
+        { status: 500 }
+      );
+    }
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
@@ -19,11 +24,11 @@ export async function POST(req: Request) {
     if (file) {
       const bytes = await file.arrayBuffer();
       const base64Data = Buffer.from(bytes).toString('base64');
-      
+
       parts.push({
         inlineData: { mimeType: file.type, data: base64Data }
       });
-      
+
       parts.push({
         text: `Analiza este documento y extrae los movimientos financieros en un JSON válido con un array llamado "transactions" que contenga: date ("YYYY-MM-DD", usando el año ${currentYear} si no hay), title, amount (número positivo), type ("expense" o "income"), category, isRecurring (booleano). Solo devuelve el JSON puro sin markdown.`
       });
