@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,11 +8,14 @@ export async function POST(req: Request) {
     const apiKey = process.env.GEMINI_API_KEY;
     
     if (!apiKey) {
-      return NextResponse.json({ error: 'Falta la API Key en el entorno de Vercel' }, { status: 500 });
+      return NextResponse.json({ error: 'Falta la API Key en el entorno' }, { status: 500 });
     }
 
-    // Inicializamos el SDK oficial de Google
-    const ai = new GoogleGenAI({ apiKey });
+    // Inicializamos el SDK clásico y más estable
+    const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // Le pedimos explícitamente la versión "latest" para evitar el error 404
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
@@ -23,41 +26,35 @@ export async function POST(req: Request) {
     }
 
     const currentYear = new Date().getFullYear();
-    let contents = [];
+    let prompt = '';
+    let result;
 
     if (file) {
       const bytes = await file.arrayBuffer();
       const base64Data = Buffer.from(bytes).toString('base64');
       
-      contents = [
+      prompt = `Analiza este documento y extrae los movimientos financieros en un JSON válido con un array llamado "transactions" que contenga: date ("YYYY-MM-DD", usando el año ${currentYear} si no hay), title, amount (número positivo), type ("expense" o "income"), category, isRecurring (booleano). Solo devuelve el JSON puro sin markdown.`;
+      
+      const imageParts = [
         {
-          role: 'user',
-          parts: [
-            { inlineData: { data: base64Data, mimeType: file.type } },
-            { text: `Analiza este documento y extrae los movimientos financieros en un JSON válido con un array llamado "transactions" que contenga: date ("YYYY-MM-DD", usando el año ${currentYear} si no hay), title, amount (número positivo), type ("expense" o "income"), category, isRecurring (booleano). Solo devuelve el JSON puro sin markdown.` }
-          ]
+          inlineData: {
+            data: base64Data,
+            mimeType: file.type
+          }
         }
       ];
+      
+      result = await model.generateContent([prompt, ...imageParts]);
     } else {
-      contents = [
-        {
-          role: 'user',
-          parts: [{ text: `Analiza este texto y extrae las transacciones en un JSON con formato {"transactions": [...]}.` }]
-        }
-      ];
+      prompt = `Analiza este texto y extrae las transacciones en un JSON con formato {"transactions": [...]}. Solo devuelve el JSON puro.`;
+      result = await model.generateContent(prompt);
     }
 
-    // Llamada a la IA usando el SDK oficial
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: contents,
-      config: {
-        responseMimeType: 'application/json',
-      }
-    });
-
-    const resultText = response.text || '{"transactions":[]}';
-    const data = JSON.parse(resultText);
+    const responseText = result.response.text();
+    
+    // Limpiamos los "backticks" (```json) que Google a veces incluye y rompen el código
+    const cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const data = JSON.parse(cleanText || '{"transactions":[]}');
 
     return NextResponse.json(data);
   } catch (error: any) {
