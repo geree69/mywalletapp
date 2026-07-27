@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server';
 
-// ¡ESTA LÍNEA ES LA CLAVE! 
-// Obliga a Vercel a ejecutar la ruta en tiempo real y leer las variables de entorno en el momento.
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
-    // Buscamos la clave comprobando los dos nombres posibles para evitar fallos
     const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     
     if (!apiKey) {
+      // 🔴 MENSAJE RASTREADOR: Si sale esto, el código SÍ se ha actualizado.
       return NextResponse.json(
-        { error: 'Falta la API Key en el entorno de Vercel' },
+        { error: `🔥 MODO DEBUG: Vercel está leyendo tu código, pero la API Key sigue invisible. Entorno: ${process.env.NODE_ENV}` },
         { status: 500 }
       );
     }
