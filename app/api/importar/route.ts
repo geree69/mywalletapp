@@ -51,21 +51,30 @@ export async function POST(req: Request) {
       });
     }
 
-    const apiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            responseMimeType: 'application/json'
-          }
-        }),
-      }
-    );
+    // Configuración adaptada para tokens AQ. o claves AIza
+    const isBearerToken = apiKey.startsWith('AQ.');
+    let url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
+    
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (isBearerToken) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    } else {
+      url += `?key=${apiKey}`;
+    }
+
+    const apiResponse = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: {
+          responseMimeType: 'application/json'
+        }
+      }),
+    });
 
     if (!apiResponse.ok) {
       const errText = await apiResponse.text();
