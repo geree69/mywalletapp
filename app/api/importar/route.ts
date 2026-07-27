@@ -7,7 +7,6 @@ export async function POST(req: Request) {
     const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     
     if (!apiKey) {
-      // 🔴 MENSAJE RASTREADOR: Si sale esto, el código SÍ se ha actualizado.
       return NextResponse.json(
         { error: `🔥 MODO DEBUG: Vercel está leyendo tu código, pero la API Key sigue invisible. Entorno: ${process.env.NODE_ENV}` },
         { status: 500 }
@@ -42,19 +41,12 @@ export async function POST(req: Request) {
       });
     }
 
-    const isBearerToken = apiKey.startsWith('AQ.');
-    let url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-
-    if (isBearerToken) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    } else {
-      url += `?key=${apiKey}`;
-    }
+    // 🔴 AQUÍ ESTABA EL ERROR: Ahora pasamos la clave directamente en la URL como dicta Google.
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const apiResponse = await fetch(url, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts }],
         generationConfig: { responseMimeType: 'application/json' }
