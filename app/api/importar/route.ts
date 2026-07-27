@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenAI } from '@google/genai';
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    
+    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        { error: 'La variable GEMINI_API_KEY no está configurada en el entorno.' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Falta la API Key en el entorno de Vercel' }, { status: 500 });
     }
+
+    // Inicializar con el SDK oficial
+    const ai = new GoogleGenAI({ apiKey });
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
@@ -20,56 +20,39 @@ export async function POST(req: Request) {
     }
 
     const currentYear = new Date().getFullYear();
-    let parts: any[] = [];
+    let contents: any[] = [];
 
     if (file) {
       const bytes = await file.arrayBuffer();
       const base64Data = Buffer.from(bytes).toString('base64');
-      
-      parts.push({
+
+      contents.push({
         inlineData: { mimeType: file.type, data: base64Data }
       });
-      
-      parts.push({
+
+      contents.push({
         text: `Analiza este documento y extrae los movimientos financieros en un JSON válido con un array llamado "transactions" que contenga: date ("YYYY-MM-DD", usando el año ${currentYear} si no hay), title, amount (número positivo), type ("expense" o "income"), category, isRecurring (booleano). Solo devuelve el JSON puro sin markdown.`
       });
     } else {
-      parts.push({
+      contents.push({
         text: `Analiza este texto y extrae las transacciones en un JSON con formato {"transactions": [...]}.`
       });
     }
 
-    const isBearerToken = apiKey.startsWith('AQ.');
-    let url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-
-    if (isBearerToken) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    } else {
-      url += `?key=${apiKey}`;
-    }
-
-    const apiResponse = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: { responseMimeType: 'application/json' }
-      }),
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: contents,
+      config: {
+        responseMimeType: 'application/json',
+      }
     });
 
-    if (!apiResponse.ok) {
-      const errText = await apiResponse.text();
-      throw new Error(`Google API Error (${apiResponse.status}): ${errText}`);
-    }
-
-    const resultJson = await apiResponse.json();
-    const resultText = resultJson.candidates?.[0]?.content?.parts?.[0]?.text || '{"transactions":[]}';
+    const resultText = response.text || '{"transactions":[]}';
     const data = JSON.parse(resultText);
 
     return NextResponse.json(data);
   } catch (error: any) {
-    console.error('Error detallado:', error);
+    console.error('Error detallado SDK:', error);
     return NextResponse.json({ error: error.message || 'Error al procesar con IA' }, { status: 500 });
   }
 }
