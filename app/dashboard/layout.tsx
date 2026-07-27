@@ -22,12 +22,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!loadingData && !user) {
       router.push('/');
     }
   }, [user, loadingData, router]);
+
+  useEffect(() => {
+    setIsActionMenuOpen(false);
+  }, [pathname]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -41,21 +47,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const accounts = state.accounts || [];
   const realGlobalBalance = accounts.reduce((sum: number, acc: any) => sum + Number(acc.balance || 0), 0);
 
-  // Determinar si se muestra el botón + y su acción según la pestaña activa
   const showPlusButton = pathname === '/dashboard' || pathname === '/dashboard/movimientos';
 
   const handlePlusClick = () => {
     if (pathname === '/dashboard') {
-      setIsBalanceModalOpen(true); // En Resumen abre el modal de cuentas
+      setIsBalanceModalOpen(true);
     } else if (pathname === '/dashboard/movimientos') {
-      setIsTxModalOpen(true);    // En Movimientos abre el modal de transacciones
+      setIsActionMenuOpen(!isActionMenuOpen);
     }
   };
 
   return (
-    <div className="w-full h-full md:max-w-[420px] md:h-[860px] md:rounded-[36px] md:border-[6px] md:border-[#22222a] bg-[#0D0D12] shadow-2xl flex flex-col relative overflow-hidden">
+    <div className="w-full h-full md:max-w-[420px] md:h-[860px] md:mx-auto md:my-8 md:rounded-[36px] md:border-[6px] md:border-[#22222a] bg-[#0D0D12] shadow-2xl flex flex-col relative overflow-hidden">
       
-      {/* Cabecera */}
       <header className="bg-[var(--paper)] px-6 pt-7 pb-5 border-b border-[var(--paper-line)] relative shrink-0 z-10">
         <h1 className="font-['Playfair_Display'] text-[20px] font-semibold text-[var(--ink)] m-0 mb-6 tracking-wide">
           MyWalletApp
@@ -77,17 +81,49 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </header>
 
-      {/* Contenido Central */}
       <main className="flex-1 overflow-y-auto p-4 pb-28 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {children}
       </main>
 
-      {/* BOTÓN FLOTANTE GLOBAL (Solo visible en Resumen y Movimientos) */}
+      {isActionMenuOpen && (
+        <div 
+          className="absolute inset-0 z-20" 
+          onClick={() => setIsActionMenuOpen(false)}
+        />
+      )}
+
+      {isActionMenuOpen && showPlusButton && pathname === '/dashboard/movimientos' && (
+        <div className="absolute bottom-[170px] right-4 z-30 flex flex-col items-end gap-3 animate-[fade_0.2s_ease]">
+          
+          <button 
+            onClick={() => {
+              setIsActionMenuOpen(false);
+              router.push('/dashboard/importar');
+            }}
+            className="flex items-center gap-3 bg-[var(--paper-2)] border border-[var(--gold)] text-[var(--gold)] px-4 py-2.5 rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.2)] font-semibold text-[13px] active:scale-95 transition-transform cursor-pointer"
+          >
+            <span>Escanear con IA</span>
+            <span className="text-[16px]">🔮</span>
+          </button>
+
+          <button 
+            onClick={() => {
+              setIsActionMenuOpen(false);
+              setIsTxModalOpen(true);
+            }}
+            className="flex items-center gap-3 bg-[var(--paper-2)] border border-[var(--paper-line)] text-[var(--ink)] px-4 py-2.5 rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.2)] font-medium text-[13px] active:scale-95 transition-transform cursor-pointer"
+          >
+            <span>Añadir Manualmente</span>
+            <span className="text-[16px]">✍️</span>
+          </button>
+        </div>
+      )}
+
       {showPlusButton && (
         <div className="absolute bottom-[110px] right-4 z-30">
           <button 
             onClick={handlePlusClick}
-            className="w-12 h-12 bg-[var(--gold)] text-[#0D0D12] rounded-full flex items-center justify-center text-[28px] font-light shadow-[0_4px_12px_rgba(244,197,99,0.5)] active:scale-90 transition-transform cursor-pointer border-none"
+            className={`w-12 h-12 bg-[var(--gold)] text-[#0D0D12] rounded-full flex items-center justify-center text-[28px] font-light shadow-[0_4px_12px_rgba(244,197,99,0.5)] active:scale-90 transition-transform duration-300 cursor-pointer border-none ${isActionMenuOpen ? 'rotate-45' : 'rotate-0'}`}
             title={pathname === '/dashboard' ? "Crear cuenta bancaria" : "Añadir movimiento"}
           >
             +
@@ -95,7 +131,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      {/* Barra de Navegación Inferior */}
       <nav className="absolute bottom-0 left-0 right-0 bg-[#121218] border-t border-[var(--paper-line)] flex px-1.5 py-3 pb-6 z-20 shrink-0">
         <NavItem href="/dashboard" icon={<LayoutDashboard size={22} />} label="Resumen" active={pathname === '/dashboard'} />
         <NavItem href="/dashboard/presupuesto" icon={<Calendar size={22} />} label="Anual" active={pathname === '/dashboard/presupuesto'} />

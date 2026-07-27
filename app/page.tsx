@@ -1,102 +1,91 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../lib/firebase';
 import { useAppContext } from './context/AppContext';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../lib/firebase'; // ✨ RUTA CORREGIDA: '../lib/firebase'
 
 export default function LoginPage() {
-  const [isRegistering, setIsRegistering] = useState(false);
+  const { user, loadingData } = useAppContext();
+  const router = useRouter();
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const router = useRouter();
-  const { user, loadingData } = useAppContext();
 
-  // Si ya está logueado, redirigir automáticamente al dashboard
-  if (!loadingData && user) {
-    router.push('/dashboard');
-    return null;
+  // Redirigir si ya hay sesión iniciada
+  useEffect(() => {
+    if (!loadingData && user) {
+      router.push('/dashboard');
+    }
+  }, [loadingData, user, router]);
+
+  if (loadingData || user) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-[var(--background)] text-[var(--text-soft)] text-[13px]">
+        Cargando sesión...
+      </div>
+    );
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
     try {
-      if (isRegistering) {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-      router.push('/dashboard');
+      // Intentamos iniciar sesión con Firebase
+      await signInWithEmailAndPassword(auth, email, password);
+      // Nota: Si el login es correcto, el estado 'user' cambiará y el useEffect de arriba te redirigirá automáticamente al /dashboard
     } catch (err: any) {
-      setError('Correo o contraseña incorrectos, o usuario ya existente.');
+      console.error("Error de login:", err);
+      setError('Correo o contraseña incorrectos.');
     }
   };
 
   return (
-    <div className="flex h-full w-full items-center justify-center p-4">
-      <div className="w-full max-w-[380px] bg-[var(--paper)] border border-[var(--paper-line)] rounded-[20px] p-6 shadow-xl flex flex-col space-y-6">
+    <div className="flex min-h-screen items-center justify-center p-4 bg-[var(--background)]">
+      <div className="w-full max-w-md bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-6 shadow-sm">
+        <h1 className="font-['Playfair_Display'] text-[22px] font-semibold text-[var(--ink)] mb-4 text-center">
+          Iniciar Sesión
+        </h1>
         
-        <div className="text-center space-y-1">
-          <h1 className="font-['Playfair_Display'] text-[24px] font-bold text-[var(--ink)] m-0">
-            MyWalletApp
-          </h1>
-          <p className="text-[12px] text-[var(--text-soft)] m-0">
-            {isRegistering ? 'Crea tu cuenta financiera' : 'Inicia sesión en tu libreta'}
-          </p>
-        </div>
+        <form onSubmit={handleLogin} className="space-y-4">
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/50 text-red-500 text-[12px] p-3 rounded-[8px] text-center">
+              {error}
+            </div>
+          )}
 
-        {error && (
-          <div className="bg-[rgba(235,110,93,0.1)] border border-[var(--coral)] text-[var(--coral)] text-[12px] p-3 rounded-[10px] text-center">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
           <div>
-            <label className="block text-[11px] font-medium text-[var(--text-soft)] mb-1">Correo electrónico</label>
+            <label className="block text-[11px] font-medium text-[var(--text-soft)] uppercase mb-1">Correo electrónico</label>
             <input 
               type="email" 
-              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="tucorreo@email.com"
-              className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[13px] outline-none focus:border-[var(--gold)]"
+              className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper)] text-[var(--ink)] text-[13px] outline-none focus:border-[var(--gold)] transition-colors"
+              required
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-[var(--text-soft)] mb-1">Contraseña</label>
+            <label className="block text-[11px] font-medium text-[var(--text-soft)] uppercase mb-1">Contraseña</label>
             <input 
               type="password" 
-              required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[13px] outline-none focus:border-[var(--gold)]"
+              className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper)] text-[var(--ink)] text-[13px] outline-none focus:border-[var(--gold)] transition-colors"
+              required
             />
           </div>
 
           <button 
             type="submit"
-            className="w-full py-3 bg-[var(--gold)] text-[#0D0D12] font-semibold text-[13px] rounded-[10px] border-none cursor-pointer hover:opacity-95 transition-opacity mt-2"
+            className="w-full bg-[var(--gold)] text-[#0D0D12] font-semibold text-[14px] p-3 rounded-[10px] border-none cursor-pointer active:scale-95 transition-transform mt-2 shadow-sm"
           >
-            {isRegistering ? 'Registrarse' : 'Entrar'}
+            Entrar
           </button>
         </form>
-
-        <div className="text-center">
-          <button 
-            type="button"
-            onClick={() => setIsRegistering(!isRegistering)}
-            className="bg-transparent border-none text-[var(--gold)] text-[12px] cursor-pointer hover:underline font-medium"
-          >
-            {isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate aquí'}
-          </button>
-        </div>
-
       </div>
     </div>
   );
