@@ -2,13 +2,8 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'La variable GEMINI_API_KEY no está configurada en el entorno.' },
-        { status: 500 }
-      );
-    }
+    // Clave metida directamente para evitar problemas con Vercel
+    const apiKey = "AQ.Ab8RN6LMXIdeCVD8F5qRiW5W5MBzb2Y-PZtyleUV9Qjja6GFA";
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
@@ -26,38 +21,21 @@ export async function POST(req: Request) {
       const base64Data = Buffer.from(bytes).toString('base64');
       
       parts.push({
-        inlineData: {
-          mimeType: file.type,
-          data: base64Data
-        }
+        inlineData: { mimeType: file.type, data: base64Data }
       });
       
       parts.push({
-        text: `Analiza esta imagen, PDF o documento de un extracto bancario, ticket o captura de pantalla. Extrae todos los movimientos financieros que encuentres. 
-        Devuelve estrictamente un JSON válido con un array llamado "transactions", donde cada elemento tenga exactamente estas propiedades:
-        - date: "YYYY-MM-DD" (si no hay año exacto, usa el año actual ${currentYear})
-        - title: "Nombre del comercio o concepto limpio"
-        - amount: número positivo (ej: 45.90)
-        - type: "expense" (si es un gasto/cargo) o "income" (si es un ingreso/abono)
-        - category: "Categoría sugerida (ej: Alimentación, Transporte, Ocio, Nómina, Suscripciones, etc.)"
-        - isRecurring: booleano (true si parece un gasto fijo mensual como alquiler, luz, netflix, etc., false si no)
-        No incluyas texto adicional ni formato markdown fuera del JSON, solo el JSON puro.`
+        text: `Analiza este documento y extrae los movimientos financieros en un JSON válido con un array llamado "transactions" que contenga: date ("YYYY-MM-DD", usando el año ${currentYear} si no hay), title, amount (número positivo), type ("expense" o "income"), category, isRecurring (booleano). Solo devuelve el JSON puro sin markdown.`
       });
     } else {
       parts.push({
-        text: `Analiza el siguiente texto de movimientos bancarios. Extrae todos los movimientos.
-        Devuelve estrictamente un JSON válido con un array llamado "transactions", con las propiedades: date ("YYYY-MM-DD"), title, amount (número positivo), type ("expense" o "income"), category, isRecurring (booleano).
-        Texto: ${textContent}`
+        text: `Analiza este texto y extrae las transacciones en un JSON con formato {"transactions": [...]}.`
       });
     }
 
-    // Configuración adaptada para tokens AQ. o claves AIza
     const isBearerToken = apiKey.startsWith('AQ.');
     let url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
-    
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
     if (isBearerToken) {
       headers['Authorization'] = `Bearer ${apiKey}`;
@@ -70,15 +48,13 @@ export async function POST(req: Request) {
       headers,
       body: JSON.stringify({
         contents: [{ parts }],
-        generationConfig: {
-          responseMimeType: 'application/json'
-        }
+        generationConfig: { responseMimeType: 'application/json' }
       }),
     });
 
     if (!apiResponse.ok) {
       const errText = await apiResponse.text();
-      throw new Error(`Error de la API de Gemini: ${errText}`);
+      throw new Error(`Google API Error (${apiResponse.status}): ${errText}`);
     }
 
     const resultJson = await apiResponse.json();
@@ -87,7 +63,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data);
   } catch (error: any) {
-    console.error('Error procesando con IA:', error);
-    return NextResponse.json({ error: error.message || 'Error al procesar el archivo con IA' }, { status: 500 });
+    console.error('Error detallado:', error);
+    return NextResponse.json({ error: error.message || 'Error al procesar con IA' }, { status: 500 });
   }
 }
