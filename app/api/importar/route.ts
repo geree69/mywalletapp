@@ -11,11 +11,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Falta la API Key en el entorno' }, { status: 500 });
     }
 
-    // Inicializamos el SDK clásico y más estable
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // Le pedimos explícitamente la versión "latest" para evitar el error 404
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+    // 🔴 CAMBIO CLAVE: Usamos el modelo Pro, que es universal y más potente
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
@@ -52,7 +51,7 @@ export async function POST(req: Request) {
 
     const responseText = result.response.text();
     
-    // Limpiamos los "backticks" (```json) que Google a veces incluye y rompen el código
+    // Limpiador de formato JSON por si la IA añade markdown
     const cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     const data = JSON.parse(cleanText || '{"transactions":[]}');
 
