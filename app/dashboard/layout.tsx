@@ -45,7 +45,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const accounts = state.accounts || [];
-  const realGlobalBalance = accounts.reduce((sum: number, acc: any) => sum + Number(acc.balance || 0), 0);
+  
+  // === CORRECCIÓN AQUÍ: Ignoramos las cuentas con excludeFromTotal ===
+  const realGlobalBalance = accounts.reduce((sum: number, acc: any) => {
+    if (acc.excludeFromTotal) return sum;
+    return sum + Number(acc.balance || 0);
+  }, 0);
 
   const showPlusButton = pathname === '/dashboard' || pathname === '/dashboard/movimientos';
 

@@ -15,6 +15,9 @@ const MONTH_NAMES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
 ];
 
+const BILLS = [500, 200, 100, 50, 20, 10, 5];
+const COINS = [2, 1, 0.50, 0.20, 0.10, 0.05, 0.02, 0.01];
+
 export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen: boolean, onClose: () => void, editItem?: any }) {
   const { state, saveState } = useAppContext();
   
@@ -28,9 +31,12 @@ export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen
   const [split, setSplit] = useState(false);
   const [accountId, setAccountId] = useState('');
 
-  // Estados para controlar el despliegue de sugerencias de autocompletado
+  // Estados para el autocompletado
   const [titleFocus, setTitleFocus] = useState(false);
   const [categoryFocus, setCategoryFocus] = useState(false);
+
+  // NUEVO: Estado para llevar la cuenta de billetes y monedas en ingresos
+  const [cashCounts, setCashCounts] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (isOpen) {
@@ -43,6 +49,7 @@ export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen
         setIsRecurring(editItem.isRecurring || false);
         setSplit(editItem.split || false);
         setAccountId(editItem.accountId || (state.accounts && state.accounts.length > 0 ? state.accounts[0].id : ''));
+        setCashCounts(editItem.cashCounts || {});
       } else {
         setType('expense');
         setAmount('');
@@ -52,11 +59,11 @@ export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen
         setIsRecurring(false);
         setSplit(false);
         setAccountId(state.accounts && state.accounts.length > 0 ? state.accounts[0].id : '');
+        setCashCounts({});
       }
     }
   }, [isOpen, editItem, state.accounts]);
 
-  // Extraer títulos y categorías únicas de movimientos anteriores para el autocompletado
   const { uniqueTitles, uniqueCategories } = useMemo(() => {
     const titlesSet = new Set<string>();
     const categoriesSet = new Set<string>();
@@ -72,9 +79,8 @@ export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen
     };
   }, [state.transactions]);
 
-  // Filtrar sugerencias según lo que el usuario va escribiendo
   const filteredTitles = useMemo(() => {
-    if (!title.trim()) return uniqueTitles.slice(0, 5); // Mostrar algunas por defecto si está vacío
+    if (!title.trim()) return uniqueTitles.slice(0, 5);
     return uniqueTitles.filter(t => t.toLowerCase().includes(title.toLowerCase()));
   }, [title, uniqueTitles]);
 
@@ -85,9 +91,21 @@ export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen
 
   if (!isOpen) return null;
 
-  const currentAmountVal = parseFloat(amount) || 0;
+  // Lógica para detectar si hay que enseñar la calculadora de efectivo
+  const selectedAccount = state.accounts?.find((a: any) => a.id === accountId);
+  const isCashAccount = selectedAccount?.type === 'cash';
+  const showCashGrid = type === 'income' && isCashAccount;
 
-  // Lógica inteligente para calcular cuántos meses quedan del año financiero
+  // Cálculo de la suma de monedas/billetes
+  const cashTotal = Object.entries(cashCounts).reduce((sum, [val, count]) => {
+    const numericVal = parseFloat(val);
+    const numericCount = parseInt(count) || 0;
+    return sum + (numericVal * 100 * numericCount);
+  }, 0) / 100;
+
+  // El importe real a guardar dependerá de si usamos la cuadrícula o el input
+  const currentAmountVal = showCashGrid ? cashTotal : (parseFloat(amount) || 0);
+
   const budgetStartStr = state.budgetStartMonth || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
   const [bY, bM] = budgetStartStr.split('-').map(Number);
   const [tY, tM] = (date || new Date().toISOString().split('T')[0]).split('-').map(Number);
@@ -103,7 +121,9 @@ export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen
   if (autoSplitMonths <= 0) autoSplitMonths = 1;
 
   const handleSave = async () => {
-    if (!currentAmountVal || !date || !title.trim() || !category.trim()) return alert("Por favor rellena importe, fecha, título y categoría.");
+    if (!currentAmountVal || !date || !title.trim() || !category.trim()) {
+      return alert("Por favor rellena importe, fecha, título y categoría.");
+    }
 
     const newState = { ...state };
     const currentTxs = state.transactions || [];
@@ -135,25 +155,61 @@ export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen
       split: type === 'income' ? split : false,
       splitMonths: type === 'income' ? autoSplitMonths : null,
       splitDetail: type === 'income' && split ? splitDetail : null,
-      accountId 
+      accountId,
+      // Guardamos el registro de billetes en la transacción
+      cashCounts: showCashGrid ? cashCounts : null 
     };
 
     let updatedAccounts = [...(state.accounts || [])];
 
+    // 1. REVERTIR EL MOVIMIENTO ANTIGUO (Si estamos editando)
     if (editItem && editItem.accountId) {
       const oldVal = Number(editItem.amount) || 0;
       updatedAccounts = updatedAccounts.map((acc: any) => {
         if (acc.id === editItem.accountId) {
-          return { ...acc, balance: Number(acc.balance || 0) + (editItem.type === 'expense' ? oldVal : -oldVal) };
+          let revertedCashCounts = { ...(acc.cashCounts || {}) };
+          
+          // Si el movimiento antiguo tenía billetes, se los restamos a la hucha
+          if (acc.type === 'cash' && editItem.cashCounts) {
+            Object.entries(editItem.cashCounts).forEach(([val, count]) => {
+              const num = parseInt(count as string) || 0;
+              if (num > 0) {
+                revertedCashCounts[val] = Math.max(0, (parseInt(revertedCashCounts[val]) || 0) - num).toString();
+              }
+            });
+          }
+
+          return { 
+            ...acc, 
+            balance: Number(acc.balance || 0) + (editItem.type === 'expense' ? oldVal : -oldVal),
+            cashCounts: revertedCashCounts
+          };
         }
         return acc;
       });
     }
 
+    // 2. APLICAR EL NUEVO MOVIMIENTO
     if (accountId) {
       updatedAccounts = updatedAccounts.map((acc: any) => {
         if (acc.id === accountId) {
-          return { ...acc, balance: Number(acc.balance || 0) + (type === 'expense' ? -currentAmountVal : currentAmountVal) };
+          let newCashCounts = { ...(acc.cashCounts || {}) };
+          
+          // Si es un ingreso en efectivo con cuadrícula, sumamos los billetes nuevos a la hucha
+          if (acc.type === 'cash' && showCashGrid) {
+            Object.entries(cashCounts).forEach(([val, count]) => {
+              const num = parseInt(count as string) || 0;
+              if (num > 0) {
+                newCashCounts[val] = ((parseInt(newCashCounts[val]) || 0) + num).toString();
+              }
+            });
+          }
+
+          return { 
+            ...acc, 
+            balance: Number(acc.balance || 0) + (type === 'expense' ? -currentAmountVal : currentAmountVal),
+            cashCounts: newCashCounts
+          };
         }
         return acc;
       });
@@ -166,7 +222,8 @@ export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen
     }
 
     newState.accounts = updatedAccounts;
-    newState.balance = updatedAccounts.reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
+    // Respetamos la exclusión del balance global
+    newState.balance = updatedAccounts.reduce((sum, acc) => acc.excludeFromTotal ? sum : sum + Number(acc.balance || 0), 0);
 
     const ok = await saveState(newState);
     if (ok) onClose();
@@ -190,28 +247,72 @@ export default function TransactionModal({ isOpen, onClose, editItem }: { isOpen
             <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">¿En qué cuenta?</label>
             <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]">
               {state.accounts && state.accounts.map((acc: any) => (
-                <option key={acc.id} value={acc.id}>{acc.name}</option>
+                <option key={acc.id} value={acc.id}>{acc.name} {acc.type === 'cash' ? '(Efectivo)' : ''}</option>
               ))}
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div>
-              <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Importe (€)</label>
-              <input type="number" step="any" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]" />
-            </div>
+          <div className={`grid ${showCashGrid ? 'grid-cols-1' : 'grid-cols-2'} gap-3 mb-4`}>
+            {!showCashGrid && (
+              <div className="animate-[fade_0.2s_ease]">
+                <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Importe (€)</label>
+                <input type="number" step="any" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)]" />
+              </div>
+            )}
             <div>
               <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Fecha</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-3 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[14px] outline-none focus:border-[var(--gold)] [color-scheme:dark]" />
             </div>
           </div>
 
+          {/* Cuadrícula de Efectivo (Solo visible si es Ingreso y Efectivo) */}
+          {showCashGrid && (
+            <div className="mb-4 animate-[fade_0.2s_ease] border border-[var(--paper-line)] rounded-[12px] p-3.5 bg-[var(--paper-2)] shadow-sm">
+               <label className="block text-[11px] font-medium text-[var(--text-soft)] uppercase mb-3 text-center tracking-wider">Calculadora de Billetes y Monedas</label>
+               
+               {/* Billetes */}
+               <div className="grid grid-cols-4 gap-2 mb-2">
+                 {BILLS.map((val) => (
+                    <div key={val} className="flex flex-col border border-[var(--paper-line)] rounded-[6px] overflow-hidden bg-[var(--paper)] focus-within:border-[var(--teal-d)] transition-colors shadow-sm">
+                      <div className="bg-[var(--paper-2)] text-[10px] text-center font-bold text-[var(--text-soft)] py-1 border-b border-[var(--paper-line)]">{val}€</div>
+                      <input 
+                        type="number" min="0" placeholder="0" inputMode="numeric"
+                        value={cashCounts[val] || ''}
+                        onChange={(e) => setCashCounts(prev => ({...prev, [val]: e.target.value}))}
+                        className="w-full bg-transparent text-center text-[13px] py-1.5 outline-none font-['IBM_Plex_Mono'] text-[var(--ink)] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                      />
+                    </div>
+                 ))}
+               </div>
+
+               {/* Monedas */}
+               <div className="grid grid-cols-4 gap-2">
+                 {COINS.map((val) => (
+                    <div key={val} className="flex flex-col border border-[var(--paper-line)] rounded-[6px] overflow-hidden bg-[var(--paper)] focus-within:border-[var(--teal-d)] transition-colors shadow-sm">
+                      <div className="bg-[var(--paper-2)] text-[10px] text-center font-bold text-[var(--text-soft)] py-1 border-b border-[var(--paper-line)]">{val >= 1 ? `${val}€` : `${(val * 100).toFixed(0)}c`}</div>
+                      <input 
+                        type="number" min="0" placeholder="0" inputMode="numeric"
+                        value={cashCounts[val] || ''}
+                        onChange={(e) => setCashCounts(prev => ({...prev, [val]: e.target.value}))}
+                        className="w-full bg-transparent text-center text-[13px] py-1.5 outline-none font-['IBM_Plex_Mono'] text-[var(--ink)] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                      />
+                    </div>
+                 ))}
+               </div>
+
+               <div className="flex items-center justify-between bg-[var(--paper)] px-4 py-2.5 rounded-[8px] border border-[var(--paper-line)] mt-3">
+                  <span className="text-[11px] font-medium text-[var(--text-soft)] uppercase tracking-wider">Total a Ingresar:</span>
+                  <span className="font-['IBM_Plex_Mono'] text-[18px] font-bold text-[var(--teal-d)]">+{fmt(cashTotal)}</span>
+               </div>
+            </div>
+          )}
+
           {/* Campo de Título con Autocompletado */}
           <div className="mb-4 relative">
             <label className="block text-[12px] text-[var(--text-soft)] mb-2 font-medium">Título / Concepto</label>
             <input 
               type="text" 
-              placeholder="Ej. Alquiler, Nómina..." 
+              placeholder="Ej. Bizum Carlos, Venta de Wallapop..." 
               value={title} 
               onChange={(e) => setTitle(e.target.value)} 
               onFocus={() => setTitleFocus(true)}

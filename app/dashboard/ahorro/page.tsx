@@ -18,9 +18,10 @@ export default function AhorroPage() {
   const { state, saveState } = useAppContext();
   const accounts = state.accounts || [];
 
-  // Filtrar exclusivamente cuentas de ahorro o ambas
+  // ARREGLO CLAVE: Ahora filtramos usando el nuevo formato "purpose" (savings/both), 
+  // manteniendo compatibilidad con las cuentas antiguas (ahorro/ambas) por si acaso.
   const savingsAccounts = accounts.filter(
-    (acc: any) => acc.type === 'ahorro' || acc.type === 'ambas'
+    (acc: any) => acc.purpose === 'savings' || acc.purpose === 'both' || acc.type === 'ahorro' || acc.type === 'ambas'
   );
 
   const [editingTaeId, setEditingTaeId] = useState<string | null>(null);
@@ -118,7 +119,8 @@ export default function AhorroPage() {
                   <div>
                     <p className="font-semibold text-[14px] text-[var(--ink)] m-0">{acc.name}</p>
                     <p className="text-[10px] text-[var(--text-soft)] uppercase m-0 mt-0.5">
-                      {acc.type === 'ahorro' ? 'Cuenta de Ahorro' : 'Día a día y Ahorro'}
+                      {/* Ajustado también el texto descriptivo */}
+                      {(acc.purpose === 'savings' || acc.type === 'ahorro') ? 'Cuenta de Ahorro' : 'Día a día y Ahorro'}
                     </p>
                   </div>
                   <p className="font-['IBM_Plex_Mono'] text-[16px] font-semibold text-[var(--gold)] m-0">

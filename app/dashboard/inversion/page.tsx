@@ -89,8 +89,8 @@ export default function InversionPage() {
     setShowModal(false);
   };
 
-  // Se actualiza para recibir un Array de IDs (ya que agrupamos múltiples compras)
-  const handleUpdateCurrentPrice = async (ids: string[], newCurrPrice: number) => {
+  // ✅ CORRECCIÓN: Ahora recibe 'newCurrPrice' como string para permitir borrar el campo o escribir decimales
+  const handleUpdateCurrentPrice = async (ids: string[], newCurrPrice: string) => {
     const updated = investments.map((inv: any) => {
       if (ids.includes(inv.id)) {
         return { ...inv, currentPricePerUnit: newCurrPrice };
@@ -351,7 +351,7 @@ export default function InversionPage() {
                 </div>
               </div>
 
-              {/* Lista interna de activos (se esconde si se cierra la categoría) */}
+              {/* Lista interna de activos */}
               {isCategoryOpen(categoryName) && (
                 <div className="space-y-3 pt-3 border-t border-[var(--paper-line)] mt-3">
                   {items.map((inv: any) => {
@@ -383,7 +383,7 @@ export default function InversionPage() {
                           <span className="text-[13px] font-semibold text-[var(--ink)]">{fmt(itemVal)}</span>
                         </div>
 
-                        {/* Detalles a la izquierda y botones Vender/Eliminar a la derecha centrados */}
+                        {/* Detalles a la izquierda y botones Vender/Eliminar a la derecha */}
                         <div className="flex justify-between items-center">
                           <div className="text-[10px] text-[var(--text-soft)] space-y-0.5">
                             <p className="m-0">Bróker: {inv.broker} • {inv.date}</p>
@@ -418,7 +418,7 @@ export default function InversionPage() {
                           </div>
                         </div>
 
-                        {/* Precio actual unitario (Input) - Oculto para la liquidez */}
+                        {/* ✅ CORRECCIÓN: Se quita el 'Number()' del e.target.value para evitar el error del 01 */}
                         {inv.category !== 'Efectivo' && (
                           <div className="flex items-center justify-between pt-2 border-t border-[var(--paper-line)] text-[11px]">
                             <span className="text-[var(--text-soft)]">Precio actual unitario (€):</span>
@@ -426,7 +426,7 @@ export default function InversionPage() {
                               type="number"
                               step="0.0001"
                               value={inv.currentPricePerUnit !== undefined ? inv.currentPricePerUnit : inv.pricePerUnit}
-                              onChange={(e) => handleUpdateCurrentPrice(inv.ids, Number(e.target.value))}
+                              onChange={(e) => handleUpdateCurrentPrice(inv.ids, e.target.value)}
                               className="w-24 p-1.5 rounded-[8px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[12px] text-right outline-none focus:border-[var(--gold)]"
                             />
                           </div>
@@ -586,7 +586,7 @@ export default function InversionPage() {
         </div>
       )}
 
-      {/* Modal Vender Activo (ACTUALIZADO) */}
+      {/* Modal Vender Activo */}
       {showSellModal && sellingInv && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="w-full max-w-[340px] bg-[var(--paper)] border border-[var(--paper-line)] rounded-[20px] p-5 shadow-2xl flex flex-col space-y-3">
