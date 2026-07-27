@@ -8,10 +8,10 @@ export async function POST(req: Request) {
     const apiKey = process.env.GEMINI_API_KEY;
     
     if (!apiKey) {
-      return NextResponse.json({ error: 'Falta la API Key en el entorno' }, { status: 500 });
+      return NextResponse.json({ error: 'Falta la API Key en el entorno de Vercel' }, { status: 500 });
     }
 
-    // Inicializamos con el SDK moderno que soporta claves AQ de cuentas de servicio
+    // Inicializamos el SDK oficial con tu clave AQ de cuenta de servicio
     const ai = new GoogleGenAI({ apiKey });
 
     const formData = await req.formData();
@@ -47,9 +47,9 @@ export async function POST(req: Request) {
       ];
     }
 
-    // Usamos el modelo estándar compatible con las nuevas credenciales de Google Cloud
+    // Llamada oficial utilizando el modelo estable gemini-2.5-flash
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       contents: contents,
       config: {
         responseMimeType: 'application/json',
