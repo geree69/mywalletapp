@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppContext } from './context/AppContext';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../lib/firebase'; // ✨ RUTA CORREGIDA: '../lib/firebase'
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../lib/firebase'; // ✨ RUTA CORREGIDA
 
 export default function LoginPage() {
   const { user, loadingData } = useAppContext();
   const router = useRouter();
   
+  const [isLogin, setIsLogin] = useState(true); // Controla si estamos en modo Login o Registro
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -29,17 +30,28 @@ export default function LoginPage() {
     );
   }
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     
     try {
-      // Intentamos iniciar sesión con Firebase
-      await signInWithEmailAndPassword(auth, email, password);
-      // Nota: Si el login es correcto, el estado 'user' cambiará y el useEffect de arriba te redirigirá automáticamente al /dashboard
+      if (isLogin) {
+        // Intentamos INICIAR sesión
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        // Intentamos CREAR cuenta nueva
+        await createUserWithEmailAndPassword(auth, email, password);
+      }
     } catch (err: any) {
-      console.error("Error de login:", err);
-      setError('Correo o contraseña incorrectos.');
+      console.error("Error de autenticación:", err);
+      // Mensajes de error más amigables
+      if (err.code === 'auth/email-already-in-use') {
+        setError('Este correo ya está registrado.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('La contraseña debe tener al menos 6 caracteres.');
+      } else {
+        setError(isLogin ? 'Correo o contraseña incorrectos.' : 'Error al crear la cuenta.');
+      }
     }
   };
 
@@ -47,10 +59,10 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-4 bg-[var(--background)]">
       <div className="w-full max-w-md bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-6 shadow-sm">
         <h1 className="font-['Playfair_Display'] text-[22px] font-semibold text-[var(--ink)] mb-4 text-center">
-          Iniciar Sesión
+          {isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'}
         </h1>
         
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleAuth} className="space-y-4">
           {error && (
             <div className="bg-red-500/10 border border-red-500/50 text-red-500 text-[12px] p-3 rounded-[8px] text-center">
               {error}
@@ -83,9 +95,25 @@ export default function LoginPage() {
             type="submit"
             className="w-full bg-[var(--gold)] text-[#0D0D12] font-semibold text-[14px] p-3 rounded-[10px] border-none cursor-pointer active:scale-95 transition-transform mt-2 shadow-sm"
           >
-            Entrar
+            {isLogin ? 'Entrar' : 'Registrarse'}
           </button>
         </form>
+
+        {/* Botón para cambiar entre Login y Registro */}
+        <p className="text-center text-[12px] text-[var(--text-soft)] mt-5">
+          {isLogin ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}{' '}
+          <button 
+            type="button" 
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError(''); // Limpiamos errores al cambiar de modo
+            }}
+            className="text-[var(--gold)] font-semibold hover:underline"
+          >
+            {isLogin ? 'Regístrate' : 'Inicia sesión'}
+          </button>
+        </p>
+
       </div>
     </div>
   );
