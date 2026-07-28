@@ -51,6 +51,7 @@ export default function ResumenPage() {
     return [...(state.transactions || [])].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [state.transactions]);
 
+  // ✨ AQUÍ ESTÁ LA MAGIA CORREGIDA
   const { currentMonthExpense, currentMonthIncome, remainingBudget, effectiveMonthlyBudget, spentPct, monthName, isOverBudget } = useMemo(() => {
     const d = new Date();
     const currentMonthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -60,28 +61,38 @@ export default function ResumenPage() {
     const baseMonthly = annualBudget / 12;
 
     let expense = 0;
-    let splitIncome = 0;
-    let regularIncome = 0;
+    let actualIncomeThisMonth = 0; // Dinero real que entra al banco (Liquidez)
+    let proratedIncomeThisMonth = 0; // Dinero contable para el presupuesto (Repartido)
 
     (state.transactions || []).forEach((t: any) => {
       const tKey = (t.date && t.date.length >= 7) ? t.date.slice(0, 7) : '';
 
-      if (t.split && Array.isArray(t.splitDetail)) {
-        const entry = t.splitDetail.find((detail: any) => detail.key === currentMonthKey);
-        if (entry && t.type === 'income') {
-          splitIncome += entry.amount;
+      // 1. LIQUIDEZ: ¿Entró o salió dinero real este mes?
+      if (tKey === currentMonthKey) {
+        if (t.type === 'income') {
+          actualIncomeThisMonth += Number(t.amount || 0); // Si el bono entró este mes, lo suma íntegro
+        } else if (t.type === 'expense') {
+          expense += Math.abs(Number(t.amount || 0));
         }
-      } else if (tKey === currentMonthKey && t.type === 'income') {
-        regularIncome += Number(t.amount || 0);
       }
 
-      if (tKey === currentMonthKey && t.type === 'expense') {
-        expense += Math.abs(Number(t.amount || 0));
+      // 2. CONTABILIDAD/PRESUPUESTO: ¿De cuánto dinero dispongo este mes para gastar?
+      if (t.type === 'income') {
+        if (t.split && Array.isArray(t.splitDetail)) {
+          // Si es un ingreso repartido, buscamos el "trocito" que nos toca este mes
+          const entry = t.splitDetail.find((detail: any) => detail.key === currentMonthKey);
+          if (entry) {
+            proratedIncomeThisMonth += entry.amount;
+          }
+        } else if (tKey === currentMonthKey) {
+          // Si es un ingreso normal de este mes, se suma entero al presupuesto
+          proratedIncomeThisMonth += Number(t.amount || 0);
+        }
       }
     });
 
-    const currentIncome = regularIncome + splitIncome;
-    const effective = baseMonthly + splitIncome;
+    const currentIncome = actualIncomeThisMonth; // Lo que ves en "Ingresado" (Real)
+    const effective = baseMonthly + proratedIncomeThisMonth; // Base + trocitos repartidos
     const remaining = effective - expense;
     const over = expense > effective;
     const pct = effective > 0 ? Math.min(100, (expense / effective) * 100) : 0;
@@ -215,7 +226,6 @@ export default function ResumenPage() {
 
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                    {/* ARREGLO: ¡Ha vuelto el botón de editar principal! */}
                     <button 
                       onClick={() => openEditModal(acc)}
                       className="text-[11px] font-medium text-[var(--text-soft)] hover:text-[var(--gold)] bg-transparent border-none cursor-pointer px-1.5 py-1 transition-colors"

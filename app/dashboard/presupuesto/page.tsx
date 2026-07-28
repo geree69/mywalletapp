@@ -28,7 +28,7 @@ export default function PresupuestoPage() {
     let [y, m] = startKey.split('-').map(Number);
     let generatedMonths = [];
     let tSplitIncome = 0;
-    let tExpense = 0; // Sumador para el gasto de todo el año
+    let tExpense = 0;
 
     for (let i = 0; i < 12; i++) {
       let date = new Date(y, m - 1 + i, 1);
@@ -39,19 +39,23 @@ export default function PresupuestoPage() {
       let expense = 0;
 
       (state.transactions || []).forEach((t: any) => {
-        if (t.split && Array.isArray(t.splitDetail)) {
-          const entry = t.splitDetail.find((d: any) => d.key === key);
-          if (entry) {
-            if (t.type === 'income') income += entry.amount;
-            else expense += entry.amount;
-          }
-          return;
-        }
-        
         const tKey = (t.date && t.date.length >= 7) ? t.date.slice(0, 7) : 'sin-fecha';
-        if (tKey === key) {
-          if (t.type === 'expense') {
-            expense += Math.abs(Number(t.amount || 0)); // Aseguramos que se sume en positivo
+
+        if (t.type === 'income') {
+          if (t.split && Array.isArray(t.splitDetail)) {
+            // Si es repartido, buscamos si tiene un trocito para este mes
+            const entry = t.splitDetail.find((d: any) => d.key === key);
+            if (entry) {
+              income += entry.amount;
+            }
+          } else if (tKey === key) {
+            // Si es un ingreso normal (no repartido), se suma entero al presupuesto de su mes
+            income += Number(t.amount || 0);
+          }
+        } else if (t.type === 'expense') {
+          // Los gastos siempre se asignan al mes en el que ocurren
+          if (tKey === key) {
+            expense += Math.abs(Number(t.amount || 0));
           }
         }
       });
@@ -139,7 +143,7 @@ export default function PresupuestoPage() {
               <span className="font-['IBM_Plex_Mono']">{fmt(state.annualBudget)}</span>
             </div>
             <div className="flex justify-between text-[12px] text-[var(--teal-d)] mt-1.5">
-              <span>Ingresos repartidos:</span>
+              <span>Ingresos extra/repartidos:</span>
               <span className="font-['IBM_Plex_Mono']">+{fmt(totalSplitIncome)}</span>
             </div>
           </div>
