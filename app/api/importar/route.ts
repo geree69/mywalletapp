@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+// VOLVEMOS A LA LIBRERÍA ESTABLE QUE TENÍAS ORIGINALMENTE
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Falta la API Key en el entorno de Vercel' }, { status: 500 });
     }
 
-    const ai = new GoogleGenAI({ apiKey });
+    // Inicializamos la librería clásica
+    const genAI = new GoogleGenerativeAI(apiKey);
+
+    // Usamos el modelo rápido (flash) forzando a que devuelva un JSON perfecto
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-1.5-flash',
+      generationConfig: { responseMimeType: "application/json" }
+    });
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
@@ -22,40 +30,27 @@ export async function POST(req: Request) {
     }
 
     const currentYear = new Date().getFullYear();
-    let contents = [];
+    const prompt = `Analiza este documento/texto y extrae los movimientos financieros en un JSON válido con un array llamado "transactions" que contenga: date ("YYYY-MM-DD", usando el año ${currentYear} si no hay), title, amount (número positivo), type ("expense" o "income"), category, isRecurring (booleano). Solo devuelve el JSON puro.`;
+
+    let result;
 
     if (file) {
       const bytes = await file.arrayBuffer();
       const base64Data = Buffer.from(bytes).toString('base64');
       
-      contents = [
-        {
-          role: 'user',
-          parts: [
-            { inlineData: { data: base64Data, mimeType: file.type } },
-            { text: `Analiza este documento y extrae los movimientos financieros en un JSON válido con un array llamado "transactions" que contenga: date ("YYYY-MM-DD", usando el año ${currentYear} si no hay), title, amount (número positivo), type ("expense" o "income"), category, isRecurring (booleano). Solo devuelve el JSON puro sin markdown.` }
-          ]
+      const imagePart = {
+        inlineData: {
+          data: base64Data,
+          mimeType: file.type
         }
-      ];
+      };
+
+      result = await model.generateContent([prompt, imagePart]);
     } else {
-      contents = [
-        {
-          role: 'user',
-          parts: [{ text: `Analiza este texto y extrae las transacciones en un JSON con formato {"transactions": [...]}.` }]
-        }
-      ];
+      result = await model.generateContent([prompt, textContent || '']);
     }
 
-    // El modelo base estándar, 100% soportado en la API v1beta
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: contents,
-      config: {
-        responseMimeType: 'application/json',
-      }
-    });
-
-    const responseText = response.text || '{"transactions":[]}';
+    const responseText = result.response.text() || '{"transactions":[]}';
     const cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     const data = JSON.parse(cleanText);
 
