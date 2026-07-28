@@ -11,10 +11,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Falta la API Key en el entorno de Vercel' }, { status: 500 });
     }
 
-    // Inicializamos la librería clásica
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    // Usamos el modelo 2.0-flash forzando a que devuelva un JSON perfecto
     const model = genAI.getGenerativeModel({ 
       model: 'gemini-2.0-flash',
       generationConfig: { responseMimeType: "application/json" }
@@ -56,8 +54,6 @@ export async function POST(req: Request) {
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('Error detallado en el servidor:', error);
-    
-    // Devolvemos el error EXACTO de Google a la pantalla para saber qué pasa
     return NextResponse.json({ 
       error: `Error de Google AI: ${error.message || 'Error desconocido'}` 
     }, { status: 500 });
