@@ -46,9 +46,9 @@ export async function POST(req: Request) {
       ];
     }
 
-    // Usamos el modelo ultraligero oficial: gemini-1.5-flash-8b
+    // El modelo base estándar, 100% soportado en la API v1beta
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash-8b',
+      model: 'gemini-1.5-flash',
       contents: contents,
       config: {
         responseMimeType: 'application/json',
