@@ -46,9 +46,9 @@ export async function POST(req: Request) {
       ];
     }
 
-    // Usamos la versión oficial actual (2.0) que es rápida y estable
+    // Usamos el modelo ultraligero oficial: gemini-1.5-flash-8b
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash-8b',
       contents: contents,
       config: {
         responseMimeType: 'application/json',
@@ -62,8 +62,6 @@ export async function POST(req: Request) {
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('Error detallado en el servidor:', error);
-    
-    // Devolvemos el error EXACTO y crudo de Google a la pantalla para saber qué pasa
     return NextResponse.json({ 
       error: `Error de Google AI: ${error.message || 'Error desconocido'}` 
     }, { status: 500 });
