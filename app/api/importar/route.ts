@@ -3,6 +3,9 @@ import { GoogleGenAI } from '@google/genai';
 
 export const dynamic = 'force-dynamic';
 
+// Función auxiliar para pausar la ejecución (Delay)
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -46,14 +49,44 @@ export async function POST(req: Request) {
       ];
     }
 
-    // Usamos el modelo gemini-3.5-flash que es súper estable y evita el error 503
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: contents,
-      config: {
-        responseMimeType: 'application/json',
+    let response;
+    let success = false;
+    const maxRetries = 3; // Intentará hasta 3 veces antes de rendirse
+
+    // BUCLE DE REINTENTO AUTOMÁTICO
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        response = await ai.models.generateContent({
+          model: 'gemini-1.5-flash', 
+          contents: contents,
+          config: {
+            responseMimeType: 'application/json',
+          }
+        });
+        
+        success = true;
+        break; // Si tiene éxito, rompe el bucle al instante
+        
+      } catch (err: any) {
+        const errorMessage = err.message || '';
+        
+        // Si el error es de sobrecarga (503), esperamos y volvemos a intentarlo
+        if (errorMessage.includes('503') || errorMessage.includes('high demand') || errorMessage.includes('UNAVAILABLE')) {
+          console.warn(`Intento ${i + 1} fallido por sobrecarga. Reintentando...`);
+          if (i < maxRetries - 1) {
+            await delay(2500); // Espera 2.5 segundos antes de volver a llamar
+          }
+        } else {
+          // Si es un error distinto (ej. la API Key está mal), lanzamos el error
+          throw err;
+        }
       }
-    });
+    }
+
+    // Si después de 3 intentos sigue fallando, informamos al usuario
+    if (!success || !response) {
+      throw new Error('Google está experimentando una sobrecarga masiva. Por favor, inténtalo en 1 minuto.');
+    }
 
     const responseText = response.text || '{"transactions":[]}';
     const cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
