@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       ];
     }
 
-    // Usamos el modelo actual recomendado por Google
+    // Usamos el modelo gemini-3.5-flash que es súper estable y evita el error 503
     const response = await ai.models.generateContent({
       model: 'gemini-3.5-flash',
       contents: contents,
