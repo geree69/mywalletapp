@@ -57,7 +57,8 @@ export async function POST(req: Request) {
     for (let i = 0; i < maxRetries; i++) {
       try {
         response = await ai.models.generateContent({
-          model: 'gemini-1.5-flash', 
+          // AQUÍ ESTABA MI ERROR: Ya está puesto el modelo estable que te funciona
+          model: 'gemini-3.5-flash', 
           contents: contents,
           config: {
             responseMimeType: 'application/json',
@@ -77,7 +78,7 @@ export async function POST(req: Request) {
             await delay(2500); // Espera 2.5 segundos antes de volver a llamar
           }
         } else {
-          // Si es un error distinto (ej. la API Key está mal), lanzamos el error
+          // Si es un error distinto (como el 404), lanzamos el error
           throw err;
         }
       }
