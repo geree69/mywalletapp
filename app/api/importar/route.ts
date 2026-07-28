@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-// VOLVEMOS A LA LIBRERÍA ESTABLE QUE TENÍAS ORIGINALMENTE
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const dynamic = 'force-dynamic';
@@ -15,9 +14,9 @@ export async function POST(req: Request) {
     // Inicializamos la librería clásica
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    // Usamos el modelo rápido (flash) forzando a que devuelva un JSON perfecto
+    // Usamos el modelo 2.0-flash forzando a que devuelva un JSON perfecto
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.0-flash',
       generationConfig: { responseMimeType: "application/json" }
     });
 
@@ -57,6 +56,8 @@ export async function POST(req: Request) {
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('Error detallado en el servidor:', error);
+    
+    // Devolvemos el error EXACTO de Google a la pantalla para saber qué pasa
     return NextResponse.json({ 
       error: `Error de Google AI: ${error.message || 'Error desconocido'}` 
     }, { status: 500 });
