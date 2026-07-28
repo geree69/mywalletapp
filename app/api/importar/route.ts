@@ -3,9 +3,6 @@ import { GoogleGenAI } from '@google/genai';
 
 export const dynamic = 'force-dynamic';
 
-// Función auxiliar para pausar la ejecución (Delay)
-const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -49,45 +46,14 @@ export async function POST(req: Request) {
       ];
     }
 
-    let response;
-    let success = false;
-    const maxRetries = 3; // Intentará hasta 3 veces antes de rendirse
-
-    // BUCLE DE REINTENTO AUTOMÁTICO
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        response = await ai.models.generateContent({
-          // AQUÍ ESTABA MI ERROR: Ya está puesto el modelo estable que te funciona
-          model: 'gemini-3.5-flash', 
-          contents: contents,
-          config: {
-            responseMimeType: 'application/json',
-          }
-        });
-        
-        success = true;
-        break; // Si tiene éxito, rompe el bucle al instante
-        
-      } catch (err: any) {
-        const errorMessage = err.message || '';
-        
-        // Si el error es de sobrecarga (503), esperamos y volvemos a intentarlo
-        if (errorMessage.includes('503') || errorMessage.includes('high demand') || errorMessage.includes('UNAVAILABLE')) {
-          console.warn(`Intento ${i + 1} fallido por sobrecarga. Reintentando...`);
-          if (i < maxRetries - 1) {
-            await delay(2500); // Espera 2.5 segundos antes de volver a llamar
-          }
-        } else {
-          // Si es un error distinto (como el 404), lanzamos el error
-          throw err;
-        }
+    // Usamos la versión oficial actual (2.0) que es rápida y estable
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: contents,
+      config: {
+        responseMimeType: 'application/json',
       }
-    }
-
-    // Si después de 3 intentos sigue fallando, informamos al usuario
-    if (!success || !response) {
-      throw new Error('Google está experimentando una sobrecarga masiva. Por favor, inténtalo en 1 minuto.');
-    }
+    });
 
     const responseText = response.text || '{"transactions":[]}';
     const cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -95,7 +61,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data);
   } catch (error: any) {
-    console.error('Error detallado:', error);
-    return NextResponse.json({ error: error.message || 'Error al procesar con IA' }, { status: 500 });
+    console.error('Error detallado en el servidor:', error);
+    
+    // Devolvemos el error EXACTO y crudo de Google a la pantalla para saber qué pasa
+    return NextResponse.json({ 
+      error: `Error de Google AI: ${error.message || 'Error desconocido'}` 
+    }, { status: 500 });
   }
 }
