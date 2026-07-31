@@ -76,7 +76,11 @@ export default function BalanceModal({ isOpen, onClose, accountToEdit }: { isOpe
     if (!name.trim()) return;
     if (type === 'bank' && !balance) return; 
 
+    // ARREGLO AQUÍ: Buscamos la cuenta original para no perder datos como el TAE
+    const existingAccount = editingId ? accounts.find((a: any) => a.id === editingId) : {};
+
     const savedAccount = {
+      ...existingAccount, // <- MAGIA: Esto clona el TAE, historial, etc. para que no se borren
       id: editingId || Date.now().toString(36),
       name: name.trim(),
       balance: finalBalance,
@@ -105,7 +109,6 @@ export default function BalanceModal({ isOpen, onClose, accountToEdit }: { isOpe
 
     await saveState(newState);
     
-    // ARREGLO AQUÍ: Ahora siempre cerramos el modal al guardar (sea nueva o editada)
     handleClose();
   };
 
