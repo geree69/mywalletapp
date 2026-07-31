@@ -42,18 +42,14 @@ export default function PresupuestoPage() {
         const tKey = (t.date && t.date.length >= 7) ? t.date.slice(0, 7) : 'sin-fecha';
 
         if (t.type === 'income') {
+          // CORRECCIÓN: Solo sumamos al presupuesto mensual si el ingreso es repartido (split)
           if (t.split && Array.isArray(t.splitDetail)) {
-            // Si es repartido, buscamos si tiene un trocito para este mes
             const entry = t.splitDetail.find((d: any) => d.key === key);
             if (entry) {
               income += entry.amount;
             }
-          } else if (tKey === key) {
-            // Si es un ingreso normal (no repartido), se suma entero al presupuesto de su mes
-            income += Number(t.amount || 0);
           }
         } else if (t.type === 'expense') {
-          // Los gastos siempre se asignan al mes en el que ocurren
           if (tKey === key) {
             expense += Math.abs(Number(t.amount || 0));
           }
@@ -85,7 +81,6 @@ export default function PresupuestoPage() {
     };
   }, [state]);
 
-  // Cálculos para la barra de progreso anual
   const yearSpentPct = totalEffectiveYear > 0 ? Math.min(100, (totalExpenseYear / totalEffectiveYear) * 100) : 0;
   const isYearOverBudget = totalEffectiveYear > 0 && totalExpenseYear > totalEffectiveYear;
 
@@ -121,7 +116,6 @@ export default function PresupuestoPage() {
           </div>
         </div>
         
-        {/* Barra de progreso anual */}
         <div className="w-full h-1.5 bg-[#2A2A38] rounded-full overflow-hidden relative mt-4">
           <div 
             className={`h-full rounded-full transition-all duration-500 ${isYearOverBudget ? 'bg-[var(--coral)]' : 'bg-[var(--teal-d)]'}`}
@@ -186,7 +180,6 @@ export default function PresupuestoPage() {
         </div>
       </div>
 
-      {/* Modal inyectado */}
       <BudgetModal isOpen={isBudgetModalOpen} onClose={() => setIsBudgetModalOpen(false)} />
     </div>
   );
