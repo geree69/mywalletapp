@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai'; // Reutilizamos la librería que ya tienes instalada
+import OpenAI from 'openai';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Falta la variable OPENROUTER_API_KEY en Vercel' }, { status: 500 });
     }
 
-    // MAGIA: Usamos el formato de OpenAI pero lo conectamos a los servidores gratuitos de OpenRouter
+    // Configuración para usar los servidores gratuitos de OpenRouter con la librería de OpenAI
     const openai = new OpenAI({
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: apiKey,
@@ -26,21 +26,21 @@ export async function POST(req: Request) {
     }
 
     const currentYear = new Date().getFullYear();
-    const promptText = `Eres un asistente financiero. Analiza este documento o texto y extrae los movimientos financieros. 
+    const promptText = `Eres un asistente financiero experto. Analiza el documento o texto proporcionado y extrae los movimientos financieros. 
     DEBES responder ÚNICAMENTE con un objeto JSON válido que contenga un array llamado "transactions".
     Cada transacción debe tener:
     - date: "YYYY-MM-DD" (usa el año ${currentYear} si no se especifica).
     - title: Concepto breve.
     - amount: Número positivo (formato numérico).
     - type: "expense" o "income".
-    - category: Categoría.
+    - category: Categoría del gasto/ingreso.
     - isRecurring: false.
-    NO añadas texto antes ni después del JSON. Solo devuelve el código JSON puro.`;
+    IMPORTANTE: No añadas saludos, ni explicaciones, ni texto en formato markdown. Devuelve SOLO el código JSON puro.`;
 
     let messages: any[] = [];
 
     if (file) {
-      // Imagen del ticket
+      // Procesamiento de la imagen del ticket
       const bytes = await file.arrayBuffer();
       const base64Data = Buffer.from(bytes).toString('base64');
       const fileUrl = `data:${file.type};base64,${base64Data}`;
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
         }
       ];
     } else {
-      // Solo texto
+      // Procesamiento de solo texto
       messages = [
         {
           role: 'user',
@@ -64,16 +64,16 @@ export async function POST(req: Request) {
       ];
     }
 
-    // Usamos el modelo Gemini 2.0 Flash a través de OpenRouter (100% GRATIS)
+    // Llamada al modelo Llama 3.2 11B Vision (100% Gratis en OpenRouter)
     const response = await openai.chat.completions.create({
-      model: 'google/gemini-2.0-flash-lite-preview-02-05:free',
+      model: 'meta-llama/llama-3.2-11b-vision-instruct:free',
       messages: messages,
-      temperature: 0.1,
+      temperature: 0.1, // Temperatura baja para respuestas precisas y sin inventos
     });
 
     let responseText = response.choices[0]?.message?.content || '{"transactions":[]}';
 
-    // Limpieza por si la IA añade texto extra
+    // LIMPIEZA EXTREMA DEL JSON: Para evitar que un texto mal formateado rompa tu app
     responseText = responseText.replace(/```json/gi, '').replace(/```/gi, '').trim();
     const jsonMatch = responseText.match(/\{[\s\S]*\}/); 
     if (jsonMatch) {
@@ -86,7 +86,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('Error detallado en el servidor:', error);
     return NextResponse.json({ 
-      error: `Error de OpenRouter AI: ${error.message || 'Error desconocido'}` 
+      error: `Error de OpenRouter AI: ${error.message || 'Error desconocido al procesar el archivo'}` 
     }, { status: 500 });
   }
 }
