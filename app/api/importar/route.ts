@@ -11,7 +11,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Falta la variable OPENROUTER_API_KEY en Vercel' }, { status: 500 });
     }
 
-    // Configuración para usar los servidores gratuitos de OpenRouter con la librería de OpenAI
+    // Configuración para usar los servidores gratuitos de OpenRouter
     const openai = new OpenAI({
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: apiKey,
@@ -64,9 +64,9 @@ export async function POST(req: Request) {
       ];
     }
 
-    // Llamada al modelo Llama 3.2 11B Vision (100% Gratis en OpenRouter)
+    // EL COMODÍN: OpenRouter elegirá automáticamente un modelo con visión 100% gratuito y activo
     const response = await openai.chat.completions.create({
-      model: 'meta-llama/llama-3.2-11b-vision-instruct:free',
+      model: 'openrouter/free',
       messages: messages,
       temperature: 0.1, // Temperatura baja para respuestas precisas y sin inventos
     });
