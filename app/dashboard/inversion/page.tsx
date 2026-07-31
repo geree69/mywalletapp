@@ -31,6 +31,12 @@ export default function InversionPage() {
   const [sellDestination, setSellDestination] = useState<'broker' | 'account'>(accounts.length > 0 ? 'account' : 'broker');
   const [sellAccountId, setSellAccountId] = useState(accounts.length > 0 ? accounts[0].id : '');
 
+  // NUEVO: Estados para el modal de TRASPASO DE LIQUIDEZ desde el Bróker
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferItem, setTransferItem] = useState<any>(null);
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferAccountId, setTransferAccountId] = useState(accounts.length > 0 ? accounts[0].id : '');
+
   // Estado para desplegables de categorías
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
@@ -121,7 +127,7 @@ export default function InversionPage() {
     let remainingUnitsToSell = unitsToSell;
     let updatedInvestments = [...investments];
 
-    // Lógica FIFO: Restamos unidades de las compras más antiguas a las más nuevas
+    // Lógica FIFO
     updatedInvestments = updatedInvestments.map(i => {
       if (sellingInv.ids.includes(i.id) && remainingUnitsToSell > 0) {
         if (i.quantity <= remainingUnitsToSell) {
@@ -137,7 +143,6 @@ export default function InversionPage() {
       return i;
     }).filter(i => !sellingInv.ids.includes(i.id) || i.quantity > 0.000001);
 
-    // Gestión del destino del dinero: Sumar directamente a la cuenta seleccionada
     let updatedAccounts = [...accounts];
     if (sellDestination === 'account' && sellAccountId) {
       updatedAccounts = updatedAccounts.map(acc => {
@@ -173,7 +178,6 @@ export default function InversionPage() {
       }
     }
 
-    // Historial de ventas
     const soldRecord = {
       id: Date.now().toString(),
       name: sellingInv.name,
@@ -185,7 +189,6 @@ export default function InversionPage() {
     };
     const updatedSold = [soldRecord, ...(state.soldInvestments || [])];
 
-    // Movimiento automático en la app
     const newTransaction = {
       id: Date.now().toString() + '-tx',
       type: 'income',
@@ -199,7 +202,6 @@ export default function InversionPage() {
     };
     const updatedTransactions = [...(state.transactions || []), newTransaction];
 
-    // Global balance recalculation
     const newGlobalBalance = updatedAccounts.reduce((sum: number, acc: any) => {
       if (acc.excludeFromTotal) return sum;
       return sum + Number(acc.balance || 0);
@@ -220,6 +222,71 @@ export default function InversionPage() {
     setSellUnits('');
     setSellDestination(accounts.length > 0 ? 'account' : 'broker');
     setSellAccountId(accounts.length > 0 ? accounts[0].id : '');
+  };
+
+  // ✅ NUEVO: Lógica para traspasar la liquidez del bróker a una cuenta bancaria
+  const handleTransferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transferItem || !transferAmount || !transferAccountId) return;
+
+    const amountToTransfer = Number(transferAmount);
+    const maxAvailable = Number(transferItem.quantity || 0);
+
+    if (amountToTransfer <= 0 || amountToTransfer > maxAvailable) {
+      alert("El importe a traspasar no es válido o supera la liquidez disponible.");
+      return;
+    }
+
+    let updatedInvestments = [...investments];
+    let updatedAccounts = [...accounts];
+
+    // 1. Restar la liquidez del bróker
+    updatedInvestments = updatedInvestments.map(i => {
+      if (transferItem.ids.includes(i.id)) {
+        const newQty = Math.max(0, Number(i.quantity || 0) - amountToTransfer);
+        return { ...i, quantity: newQty, buyPrice: newQty };
+      }
+      return i;
+    }).filter(i => Number(i.quantity || 0) > 0.000001);
+
+    // 2. Sumar el dinero a la cuenta bancaria elegida
+    updatedAccounts = updatedAccounts.map(acc => {
+      if (acc.id === transferAccountId) {
+        return { ...acc, balance: Number(acc.balance || 0) + amountToTransfer };
+      }
+      return acc;
+    });
+
+    // 3. Registrar el movimiento automático de ingreso en la cuenta
+    const newTransaction = {
+      id: Date.now().toString() + '-transfer',
+      type: 'income',
+      amount: amountToTransfer,
+      date: new Date().toISOString().split('T')[0],
+      title: `Traspaso desde ${transferItem.broker}`,
+      category: 'Traspaso de Inversión',
+      isRecurring: false,
+      split: false,
+      accountId: transferAccountId
+    };
+    const updatedTransactions = [...(state.transactions || []), newTransaction];
+
+    const newGlobalBalance = updatedAccounts.reduce((sum: number, acc: any) => {
+      if (acc.excludeFromTotal) return sum;
+      return sum + Number(acc.balance || 0);
+    }, 0);
+
+    await saveState({
+      ...state,
+      investments: updatedInvestments,
+      accounts: updatedAccounts,
+      transactions: updatedTransactions,
+      balance: newGlobalBalance,
+    });
+
+    setShowTransferModal(false);
+    setTransferItem(null);
+    setTransferAmount('');
   };
 
   const consolidated = investments.reduce((acc: any, current: any) => {
@@ -334,9 +401,11 @@ export default function InversionPage() {
               >
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-[14px] text-[var(--ink)]">{categoryName}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-[6px] font-semibold ${safeCatProfit >= 0 ? 'bg-[rgba(42,157,143,0.15)] text-[var(--teal-d)]' : 'bg-[rgba(235,110,93,0.15)] text-[var(--coral)]'}`}>
-                    {safeCatProfit > 0 ? '+' : ''}{catPct.toFixed(1)}%
-                  </span>
+                  {categoryName !== 'Efectivo' && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-[6px] font-semibold ${safeCatProfit >= 0 ? 'bg-[rgba(42,157,143,0.15)] text-[var(--teal-d)]' : 'bg-[rgba(235,110,93,0.15)] text-[var(--coral)]'}`}>
+                      {safeCatProfit > 0 ? '+' : ''}{catPct.toFixed(1)}%
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[14px] font-semibold text-[var(--ink)]">
@@ -367,7 +436,7 @@ export default function InversionPage() {
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-[13px] text-[var(--ink)]">
                               {inv.name}
-                              {inv.ids.length > 1 && <span className="text-[10px] text-[var(--text-soft)] ml-1.5 font-normal bg-[var(--paper-2)] px-1.5 py-0.5 rounded-[4px]">{inv.ids.length} compras</span>}
+                              {inv.ids.length > 1 && inv.category !== 'Efectivo' && <span className="text-[10px] text-[var(--text-soft)] ml-1.5 font-normal bg-[var(--paper-2)] px-1.5 py-0.5 rounded-[4px]">{inv.ids.length} compras</span>}
                             </span>
                             {inv.category !== 'Efectivo' && (
                               <span className={`text-[9px] px-1.5 py-0.5 rounded-[4px] font-semibold ${safeItemProfit >= 0 ? 'bg-[rgba(42,157,143,0.15)] text-[var(--teal-d)]' : 'bg-[rgba(235,110,93,0.15)] text-[var(--coral)]'}`}>
@@ -384,10 +453,24 @@ export default function InversionPage() {
                             {inv.category !== 'Efectivo' && (
                               <p className="m-0">Invertido: {fmt(inv.buyPrice)} • Precio Medio: {fmt(inv.pricePerUnit)}/ud</p>
                             )}
-                            <p className="m-0">(Tienes {displayQty} ud)</p>
+                            {inv.category !== 'Efectivo' && <p className="m-0">(Tienes {displayQty} ud)</p>}
                           </div>
                           
                           <div className="flex items-center gap-1.5 shrink-0">
+                            {inv.category === 'Efectivo' && accounts.length > 0 && (
+                              <button
+                                onClick={() => {
+                                  setTransferItem(inv);
+                                  setTransferAmount(inv.quantity.toString());
+                                  setTransferAccountId(accounts[0].id);
+                                  setShowTransferModal(true);
+                                }}
+                                className="px-2.5 py-1 bg-[var(--paper-2)] border border-[var(--paper-line)] text-[var(--gold)] font-semibold text-[11px] rounded-[8px] cursor-pointer hover:border-[var(--gold)] transition-colors"
+                              >
+                                Traspasar a cuenta
+                              </button>
+                            )}
+
                             {inv.category !== 'Efectivo' && (
                               <button
                                 onClick={() => { 
@@ -671,6 +754,68 @@ export default function InversionPage() {
                   className="w-full py-2.5 bg-[var(--gold)] text-[#0D0D12] font-semibold text-[12px] rounded-[10px] border-none cursor-pointer hover:opacity-95 transition-opacity"
                 >
                   Confirmar Venta
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* NUEVO: Modal Traspasar Liquidez a Cuenta */}
+      {showTransferModal && transferItem && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-[340px] bg-[var(--paper)] border border-[var(--paper-line)] rounded-[20px] p-5 shadow-2xl flex flex-col space-y-3">
+            <div className="flex justify-between items-center border-b border-[var(--paper-line)] pb-2">
+              <h3 className="font-['Playfair_Display'] text-[16px] font-semibold text-[var(--ink)] m-0">Traspasar a cuenta</h3>
+              <button onClick={() => setShowTransferModal(false)} className="bg-transparent border-none text-[var(--text-soft)] text-[16px] cursor-pointer">×</button>
+            </div>
+            
+            <form onSubmit={handleTransferSubmit} className="flex flex-col space-y-3 pt-1">
+              <div>
+                <label className="block text-[11px] text-[var(--text-soft)] mb-1">Importe a traspasar (€)</label>
+                <input 
+                  type="number" 
+                  step="any"
+                  max={transferItem.quantity}
+                  required
+                  value={transferAmount}
+                  onChange={(e) => setTransferAmount(e.target.value)}
+                  className="w-full p-2.5 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[12px] outline-none focus:border-[var(--gold)]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-[var(--text-soft)] mb-1">Cuenta bancaria de destino</label>
+                <select
+                  required
+                  value={transferAccountId}
+                  onChange={(e) => setTransferAccountId(e.target.value)}
+                  className="w-full p-2.5 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[12px] outline-none focus:border-[var(--gold)]"
+                >
+                  {accounts.map((acc: any) => (
+                    <option key={acc.id} value={acc.id} className="bg-[#121218] text-white">{acc.name} ({fmt(acc.balance)})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="bg-[var(--paper-2)] p-3 rounded-[10px] border border-[var(--paper-line)] flex justify-between text-[11px] text-[var(--text-soft)] mt-1">
+                <span>Disponible en {transferItem.broker}:</span>
+                <span className="text-[var(--ink)] font-medium">{fmt(transferItem.quantity)}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowTransferModal(false)}
+                  className="w-full py-2.5 bg-[var(--paper-2)] border border-[var(--paper-line)] text-[var(--ink)] font-semibold text-[12px] rounded-[10px] cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="w-full py-2.5 bg-[var(--gold)] text-[#0D0D12] font-semibold text-[12px] rounded-[10px] border-none cursor-pointer hover:opacity-95 transition-opacity"
+                >
+                  Traspasar
                 </button>
               </div>
             </form>
