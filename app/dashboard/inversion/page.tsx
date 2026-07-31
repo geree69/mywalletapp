@@ -31,7 +31,7 @@ export default function InversionPage() {
   const [sellDestination, setSellDestination] = useState<'broker' | 'account'>(accounts.length > 0 ? 'account' : 'broker');
   const [sellAccountId, setSellAccountId] = useState(accounts.length > 0 ? accounts[0].id : '');
 
-  // NUEVO: Estados para el modal de TRASPASO DE LIQUIDEZ desde el Bróker
+  // Estados para modal de TRASPASO DE LIQUIDEZ desde el Bróker
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferItem, setTransferItem] = useState<any>(null);
   const [transferAmount, setTransferAmount] = useState('');
@@ -54,6 +54,7 @@ export default function InversionPage() {
     const totalInv = Number(amount) || 0;
     const pUnit = Number(pricePerUnit) || 0;
     const qty = pUnit > 0 ? totalInv / pUnit : 0;
+    const invDate = date || new Date().toISOString().split('T')[0];
 
     const newInv = {
       id: Date.now().toString(),
@@ -64,7 +65,7 @@ export default function InversionPage() {
       pricePerUnit: pUnit,
       quantity: qty,
       currentPricePerUnit: pUnit,
-      date: date || new Date().toISOString().split('T')[0],
+      date: invDate,
     };
 
     let updatedAccounts = [...accounts];
@@ -77,10 +78,31 @@ export default function InversionPage() {
       });
     }
 
+    // ✅ NUEVO: Movimiento automático en la app para que aparezca como gasto/inversión en el historial
+    const newTransaction = {
+      id: Date.now().toString() + '-buy-tx',
+      type: 'expense',
+      amount: totalInv,
+      date: invDate,
+      title: `Inversión en ${name.trim()}`,
+      category: 'Inversión',
+      isRecurring: false,
+      split: false,
+      accountId: selectedAccountId || ''
+    };
+    const updatedTransactions = [...(state.transactions || []), newTransaction];
+
+    const newGlobalBalance = updatedAccounts.reduce((sum: number, acc: any) => {
+      if (acc.excludeFromTotal) return sum;
+      return sum + Number(acc.balance || 0);
+    }, 0);
+
     const newState = {
       ...state,
       investments: [...investments, newInv],
       accounts: updatedAccounts,
+      transactions: updatedTransactions,
+      balance: newGlobalBalance,
     };
 
     await saveState(newState);
@@ -127,7 +149,6 @@ export default function InversionPage() {
     let remainingUnitsToSell = unitsToSell;
     let updatedInvestments = [...investments];
 
-    // Lógica FIFO
     updatedInvestments = updatedInvestments.map(i => {
       if (sellingInv.ids.includes(i.id) && remainingUnitsToSell > 0) {
         if (i.quantity <= remainingUnitsToSell) {
@@ -224,7 +245,6 @@ export default function InversionPage() {
     setSellAccountId(accounts.length > 0 ? accounts[0].id : '');
   };
 
-  // ✅ NUEVO: Lógica para traspasar la liquidez del bróker a una cuenta bancaria
   const handleTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!transferItem || !transferAmount || !transferAccountId) return;
@@ -240,7 +260,6 @@ export default function InversionPage() {
     let updatedInvestments = [...investments];
     let updatedAccounts = [...accounts];
 
-    // 1. Restar la liquidez del bróker
     updatedInvestments = updatedInvestments.map(i => {
       if (transferItem.ids.includes(i.id)) {
         const newQty = Math.max(0, Number(i.quantity || 0) - amountToTransfer);
@@ -249,7 +268,6 @@ export default function InversionPage() {
       return i;
     }).filter(i => Number(i.quantity || 0) > 0.000001);
 
-    // 2. Sumar el dinero a la cuenta bancaria elegida
     updatedAccounts = updatedAccounts.map(acc => {
       if (acc.id === transferAccountId) {
         return { ...acc, balance: Number(acc.balance || 0) + amountToTransfer };
@@ -257,7 +275,6 @@ export default function InversionPage() {
       return acc;
     });
 
-    // 3. Registrar el movimiento automático de ingreso en la cuenta
     const newTransaction = {
       id: Date.now().toString() + '-transfer',
       type: 'income',
@@ -761,7 +778,7 @@ export default function InversionPage() {
         </div>
       )}
 
-      {/* NUEVO: Modal Traspasar Liquidez a Cuenta */}
+      {/* Modal Traspasar Liquidez a Cuenta */}
       {showTransferModal && transferItem && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="w-full max-w-[340px] bg-[var(--paper)] border border-[var(--paper-line)] rounded-[20px] p-5 shadow-2xl flex flex-col space-y-3">
