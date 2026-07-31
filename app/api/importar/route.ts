@@ -61,18 +61,18 @@ export async function POST(req: Request) {
       ];
     }
 
-    // Usamos Llama 3.2 90B Vision, un modelo brutalmente potente y gratis en Groq
+    // CAMBIO AQUÍ: Usamos el modelo de visión de 11B que está activo y soportado
     const response = await groq.chat.completions.create({
-      model: file ? 'llama-3.2-90b-vision-preview' : 'llama-3.1-8b-instant',
+      model: file ? 'llama-3.2-11b-vision-preview' : 'llama-3.1-8b-instant',
       messages: messages,
-      temperature: 0.1, // Temperatura baja para que no se invente datos
+      temperature: 0.1, 
     });
 
     let responseText = response.choices[0]?.message?.content || '{"transactions":[]}';
 
-    // LIMPIEZA EXTREMA: A veces la IA añade texto basura alrededor del JSON, esto lo limpia
+    // LIMPIEZA EXTREMA
     responseText = responseText.replace(/```json/gi, '').replace(/```/gi, '').trim();
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/); // Busca dónde empieza y acaba el JSON real
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/); 
     if (jsonMatch) {
         responseText = jsonMatch[0];
     }
