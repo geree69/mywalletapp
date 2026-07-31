@@ -126,7 +126,8 @@ export default function ImportarPage() {
   };
 
   return (
-    <div className="flex flex-col space-y-4 pb-12">
+    /* Añadimos 'hidden' aquí abajo para ocultar toda la sección de golpe */
+    <div className="hidden flex flex-col space-y-4 pb-12">
       <div>
         <h2 className="font-['Playfair_Display'] text-[20px] font-semibold m-0 mb-1 text-[var(--ink)] tracking-wide">
           Importar Movimientos con IA
