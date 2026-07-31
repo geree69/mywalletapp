@@ -28,8 +28,8 @@ export default function InversionPage() {
   const [sellingInv, setSellingInv] = useState<any>(null);
   const [sellUnits, setSellUnits] = useState('');
   const [sellPricePerUnit, setSellPricePerUnit] = useState('');
-  const [sellDestination, setSellDestination] = useState<'broker' | 'account'>('broker');
-  const [sellAccountId, setSellAccountId] = useState('');
+  const [sellDestination, setSellDestination] = useState<'broker' | 'account'>(accounts.length > 0 ? 'account' : 'broker');
+  const [sellAccountId, setSellAccountId] = useState(accounts.length > 0 ? accounts[0].id : '');
 
   // Estado para desplegables de categorías
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
@@ -38,7 +38,7 @@ export default function InversionPage() {
     setOpenCategories(prev => ({ ...prev, [cat]: prev[cat] === false ? true : false }));
   };
 
-  const isCategoryOpen = (cat: string) => openCategories[cat] !== false; // Abiertas por defecto
+  const isCategoryOpen = (cat: string) => openCategories[cat] !== false;
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +89,6 @@ export default function InversionPage() {
     setShowModal(false);
   };
 
-  // ✅ CORRECCIÓN: Ahora recibe 'newCurrPrice' como string para permitir borrar el campo o escribir decimales
   const handleUpdateCurrentPrice = async (ids: string[], newCurrPrice: string) => {
     const updated = investments.map((inv: any) => {
       if (ids.includes(inv.id)) {
@@ -100,7 +99,6 @@ export default function InversionPage() {
     await saveState({ ...state, investments: updated });
   };
 
-  // Borrar elimina TODAS las compras vinculadas a ese activo agrupado
   const handleDelete = async (ids: string[]) => {
     if (!confirm('¿Borrar esta inversión y todas sus compras asociadas?')) return;
     const updated = investments.filter((i: any) => !ids.includes(i.id));
@@ -139,7 +137,7 @@ export default function InversionPage() {
       return i;
     }).filter(i => !sellingInv.ids.includes(i.id) || i.quantity > 0.000001);
 
-    // Gestión del destino del dinero
+    // Gestión del destino del dinero: Sumar directamente a la cuenta seleccionada
     let updatedAccounts = [...accounts];
     if (sellDestination === 'account' && sellAccountId) {
       updatedAccounts = updatedAccounts.map(acc => {
@@ -187,7 +185,7 @@ export default function InversionPage() {
     };
     const updatedSold = [soldRecord, ...(state.soldInvestments || [])];
 
-    // Movimiento automático
+    // Movimiento automático en la app
     const newTransaction = {
       id: Date.now().toString() + '-tx',
       type: 'income',
@@ -201,23 +199,29 @@ export default function InversionPage() {
     };
     const updatedTransactions = [...(state.transactions || []), newTransaction];
 
+    // Global balance recalculation
+    const newGlobalBalance = updatedAccounts.reduce((sum: number, acc: any) => {
+      if (acc.excludeFromTotal) return sum;
+      return sum + Number(acc.balance || 0);
+    }, 0);
+
     await saveState({
       ...state,
       investments: updatedInvestments,
       accounts: updatedAccounts,
       soldInvestments: updatedSold,
       transactions: updatedTransactions,
+      balance: newGlobalBalance,
     });
 
     setShowSellModal(false);
     setSellingInv(null);
     setSellPricePerUnit('');
     setSellUnits('');
-    setSellDestination('broker');
-    setSellAccountId('');
+    setSellDestination(accounts.length > 0 ? 'account' : 'broker');
+    setSellAccountId(accounts.length > 0 ? accounts[0].id : '');
   };
 
-  // === AGRUPACIÓN INTELIGENTE DE ACTIVOS ===
   const consolidated = investments.reduce((acc: any, current: any) => {
     const name = (current.name || '').trim();
     const category = current.category || 'Otros';
@@ -232,7 +236,6 @@ export default function InversionPage() {
         ids: [current.id] 
       };
     } else {
-      // Sumamos la cantidad y el invertido, y recalculamos la media de compra
       acc[key].buyPrice = Number(acc[key].buyPrice || 0) + Number(current.buyPrice || 0);
       acc[key].quantity = Number(acc[key].quantity || 0) + Number(current.quantity || 0);
       acc[key].pricePerUnit = acc[key].quantity > 0 ? acc[key].buyPrice / acc[key].quantity : 0;
@@ -256,7 +259,6 @@ export default function InversionPage() {
 
   const mergedInvestments = Object.values(consolidated);
 
-  // Cálculos totales
   const totalInverted = mergedInvestments.reduce((acc: number, i: any) => acc + Number(i.buyPrice || 0), 0);
   const totalCurrentValue = mergedInvestments.reduce((acc: number, i: any) => {
     const qty = Number(i.quantity || 0);
@@ -268,7 +270,6 @@ export default function InversionPage() {
   const safeTotalProfit = Math.round(totalProfit * 100) / 100;
   const totalProfitPercent = totalInverted > 0 ? (totalProfit / totalInverted) * 100 : 0;
 
-  // Agrupar por categoría visual
   const grouped: Record<string, any[]> = {};
   mergedInvestments.forEach((i: any) => {
     const cat = i.category || 'Otros';
@@ -287,7 +288,6 @@ export default function InversionPage() {
         </p>
       </div>
 
-      {/* Tarjetas superiores */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-3.5">
           <p className="text-[11px] text-[var(--text-soft)] m-0 mb-1 uppercase tracking-wider">Invertido</p>
@@ -303,7 +303,6 @@ export default function InversionPage() {
         </div>
       </div>
 
-      {/* Tarjeta de rentabilidad total */}
       <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-3.5 text-center">
         <p className="text-[11px] text-[var(--text-soft)] m-0 mb-1">Rentabilidad total:</p>
         <p className={`text-[16px] font-semibold m-0 ${safeTotalProfit >= 0 ? 'text-[var(--teal-d)]' : 'text-[var(--coral)]'}`}>
@@ -311,7 +310,6 @@ export default function InversionPage() {
         </p>
       </div>
 
-      {/* Listado agrupado por categorías */}
       {Object.keys(grouped).length === 0 ? (
         <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-6 text-center text-[var(--text-soft)] text-[13px]">
           No tienes inversiones registradas.
@@ -330,7 +328,6 @@ export default function InversionPage() {
 
           return (
             <div key={categoryName} className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-4 flex flex-col shadow-sm">
-              {/* Encabezado colapsable */}
               <div 
                 className="flex justify-between items-center cursor-pointer select-none"
                 onClick={() => toggleCategory(categoryName)}
@@ -351,7 +348,6 @@ export default function InversionPage() {
                 </div>
               </div>
 
-              {/* Lista interna de activos */}
               {isCategoryOpen(categoryName) && (
                 <div className="space-y-3 pt-3 border-t border-[var(--paper-line)] mt-3">
                   {items.map((inv: any) => {
@@ -367,7 +363,6 @@ export default function InversionPage() {
                     return (
                       <div key={inv.id} className="bg-[var(--paper)] border border-[var(--paper-line)] rounded-[12px] p-3 space-y-2.5">
                         
-                        {/* Top line de la inversión */}
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-[13px] text-[var(--ink)]">
@@ -383,7 +378,6 @@ export default function InversionPage() {
                           <span className="text-[13px] font-semibold text-[var(--ink)]">{fmt(itemVal)}</span>
                         </div>
 
-                        {/* Detalles a la izquierda y botones Vender/Eliminar a la derecha */}
                         <div className="flex justify-between items-center">
                           <div className="text-[10px] text-[var(--text-soft)] space-y-0.5">
                             <p className="m-0">Bróker: {inv.broker} • {inv.date}</p>
@@ -418,7 +412,6 @@ export default function InversionPage() {
                           </div>
                         </div>
 
-                        {/* ✅ CORRECCIÓN: Se quita el 'Number()' del e.target.value para evitar el error del 01 */}
                         {inv.category !== 'Efectivo' && (
                           <div className="flex items-center justify-between pt-2 border-t border-[var(--paper-line)] text-[11px]">
                             <span className="text-[var(--text-soft)]">Precio actual unitario (€):</span>
@@ -441,7 +434,6 @@ export default function InversionPage() {
         })
       )}
 
-      {/* Botón grande inferior */}
       <button
         onClick={() => setShowModal(true)}
         className="w-full py-3.5 bg-[var(--gold)] text-[#0D0D12] font-semibold text-[13px] rounded-[var(--radius)] border-none cursor-pointer hover:opacity-95 transition-opacity shadow-sm mt-2"
@@ -623,20 +615,20 @@ export default function InversionPage() {
               </div>
 
               <div>
-                 <label className="block text-[11px] text-[var(--text-soft)] mb-1">¿Qué hacer con el dinero?</label>
+                 <label className="block text-[11px] text-[var(--text-soft)] mb-1">¿Qué hacer con el dinero de la venta?</label>
                  <select
                    value={sellDestination}
                    onChange={(e) => setSellDestination(e.target.value as 'broker' | 'account')}
                    className="w-full p-2.5 rounded-[10px] border border-[var(--paper-line)] bg-[var(--paper-2)] text-[var(--ink)] text-[12px] outline-none focus:border-[var(--gold)]"
                  >
+                   <option value="account" className="bg-[#121218] text-white">Sumarlo directamente a una cuenta</option>
                    <option value="broker" className="bg-[#121218] text-white">Guardarlo en Inversiones (Liquidez)</option>
-                   <option value="account" className="bg-[#121218] text-white">Transferirlo a una cuenta</option>
                  </select>
               </div>
 
               {sellDestination === 'account' && (
                   <div className="animate-[fade_0.2s_ease]">
-                    <label className="block text-[11px] text-[var(--text-soft)] mb-1">Selecciona la cuenta</label>
+                    <label className="block text-[11px] text-[var(--text-soft)] mb-1">Selecciona la cuenta destino</label>
                     <select
                       required
                       value={sellAccountId}
