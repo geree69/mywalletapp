@@ -61,11 +61,17 @@ export async function POST(req: Request) {
       ];
     }
 
-    // LISTA DE RESPALDO: Usamos los modelos gratuitos de Gemini con visión. Si falla el 2.0, prueba el 1.5.
+    // LISTA DE RESPALDO CORRECTA: Si falla el primero, OpenRouter saltará automáticamente a los siguientes de la lista
     const response = await openai.chat.completions.create({
-      model: 'google/gemini-2.0-flash:free,google/gemini-1.5-flash:free',
+      model: 'google/gemini-2.0-flash-exp:free',
       messages: messages,
       temperature: 0.0,
+      extra_body: {
+        models: [
+          'google/gemini-1.5-pro-free',
+          'qwen/qwen-2-vl-7b-instruct:free'
+        ]
+      }
     });
 
     const responseText = response.choices[0]?.message?.content || '';
