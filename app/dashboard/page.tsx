@@ -14,18 +14,16 @@ const fmt = (n: number) => {
   return v.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 };
 
-// ARREGLO: Ahora entiende tanto las palabras antiguas como las nuevas de la base de datos
 const getAccountTypeLabel = (type: string) => {
   if (type === 'savings' || type === 'ahorro') return 'Ahorro';
   if (type === 'both' || type === 'ambas') return 'Día a día y Ahorro';
   if (type === 'cash') return 'Efectivo';
-  return 'Día a día'; // Fallback para 'daily'
+  return 'Día a día';
 };
 
 export default function ResumenPage() {
   const { state, saveState } = useAppContext();
   
-  // ARREGLO: Volvemos a tener estados para abrir modal de crear o modal de editar
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
 
@@ -41,7 +39,6 @@ export default function ResumenPage() {
   
   const accounts = state.accounts || [];
   
-  // Sumamos el dinero de las cuentas EXCEPTO las ocultas
   const totalBalance = accounts.reduce((sum: number, acc: any) => {
     if (acc.excludeFromTotal) return sum;
     return sum + Number(acc.balance || 0);
@@ -51,7 +48,6 @@ export default function ResumenPage() {
     return [...(state.transactions || [])].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [state.transactions]);
 
-  // ✨ AQUÍ ESTÁ LA MAGIA CORREGIDA
   const { currentMonthExpense, currentMonthIncome, remainingBudget, effectiveMonthlyBudget, spentPct, monthName, isOverBudget } = useMemo(() => {
     const d = new Date();
     const currentMonthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -62,7 +58,7 @@ export default function ResumenPage() {
 
     let expense = 0;
     let actualIncomeThisMonth = 0; // Dinero real que entra al banco (Liquidez)
-    let proratedIncomeThisMonth = 0; // Dinero contable para el presupuesto (Repartido)
+    let proratedIncomeThisMonth = 0; // Dinero contable para el presupuesto (SOLO el repartido)
 
     (state.transactions || []).forEach((t: any) => {
       const tKey = (t.date && t.date.length >= 7) ? t.date.slice(0, 7) : '';
@@ -70,29 +66,26 @@ export default function ResumenPage() {
       // 1. LIQUIDEZ: ¿Entró o salió dinero real este mes?
       if (tKey === currentMonthKey) {
         if (t.type === 'income') {
-          actualIncomeThisMonth += Number(t.amount || 0); // Si el bono entró este mes, lo suma íntegro
+          actualIncomeThisMonth += Number(t.amount || 0);
         } else if (t.type === 'expense') {
           expense += Math.abs(Number(t.amount || 0));
         }
       }
 
       // 2. CONTABILIDAD/PRESUPUESTO: ¿De cuánto dinero dispongo este mes para gastar?
+      // CAMBIO: Ahora SOLO sumamos al presupuesto si el ingreso tiene activado el reparto (split)
       if (t.type === 'income') {
         if (t.split && Array.isArray(t.splitDetail)) {
-          // Si es un ingreso repartido, buscamos el "trocito" que nos toca este mes
           const entry = t.splitDetail.find((detail: any) => detail.key === currentMonthKey);
           if (entry) {
             proratedIncomeThisMonth += entry.amount;
           }
-        } else if (tKey === currentMonthKey) {
-          // Si es un ingreso normal de este mes, se suma entero al presupuesto
-          proratedIncomeThisMonth += Number(t.amount || 0);
         }
       }
     });
 
-    const currentIncome = actualIncomeThisMonth; // Lo que ves en "Ingresado" (Real)
-    const effective = baseMonthly + proratedIncomeThisMonth; // Base + trocitos repartidos
+    const currentIncome = actualIncomeThisMonth; 
+    const effective = baseMonthly + proratedIncomeThisMonth; // Base anual dividida + trocitos repartidos
     const remaining = effective - expense;
     const over = expense > effective;
     const pct = effective > 0 ? Math.min(100, (expense / effective) * 100) : 0;
@@ -262,7 +255,6 @@ export default function ResumenPage() {
         </button>
       </div>
 
-      {/* ARREGLO: Ahora el Modal recibe correctamente la cuenta que hayas mandado editar */}
       <BalanceModal 
         isOpen={isBalanceModalOpen} 
         onClose={() => { setIsBalanceModalOpen(false); setEditingAccount(null); }} 
