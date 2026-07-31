@@ -22,18 +22,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
-  
-  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!loadingData && !user) {
       router.push('/');
     }
   }, [user, loadingData, router]);
-
-  useEffect(() => {
-    setIsActionMenuOpen(false);
-  }, [pathname]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -46,7 +40,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const accounts = state.accounts || [];
   
-  // === CORRECCIÓN AQUÍ: Ignoramos las cuentas con excludeFromTotal ===
   const realGlobalBalance = accounts.reduce((sum: number, acc: any) => {
     if (acc.excludeFromTotal) return sum;
     return sum + Number(acc.balance || 0);
@@ -58,7 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (pathname === '/dashboard') {
       setIsBalanceModalOpen(true);
     } else if (pathname === '/dashboard/movimientos') {
-      setIsActionMenuOpen(!isActionMenuOpen);
+      setIsTxModalOpen(true); // Abre directamente el modal manual sin desplegables de IA
     }
   };
 
@@ -90,45 +83,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {children}
       </main>
 
-      {isActionMenuOpen && (
-        <div 
-          className="absolute inset-0 z-20" 
-          onClick={() => setIsActionMenuOpen(false)}
-        />
-      )}
-
-      {isActionMenuOpen && showPlusButton && pathname === '/dashboard/movimientos' && (
-        <div className="absolute bottom-[170px] right-4 z-30 flex flex-col items-end gap-3 animate-[fade_0.2s_ease]">
-          
-          <button 
-            onClick={() => {
-              setIsActionMenuOpen(false);
-              router.push('/dashboard/importar');
-            }}
-            className="flex items-center gap-3 bg-[var(--paper-2)] border border-[var(--gold)] text-[var(--gold)] px-4 py-2.5 rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.2)] font-semibold text-[13px] active:scale-95 transition-transform cursor-pointer"
-          >
-            <span>Escanear con IA</span>
-            <span className="text-[16px]">🔮</span>
-          </button>
-
-          <button 
-            onClick={() => {
-              setIsActionMenuOpen(false);
-              setIsTxModalOpen(true);
-            }}
-            className="flex items-center gap-3 bg-[var(--paper-2)] border border-[var(--paper-line)] text-[var(--ink)] px-4 py-2.5 rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.2)] font-medium text-[13px] active:scale-95 transition-transform cursor-pointer"
-          >
-            <span>Añadir Manualmente</span>
-            <span className="text-[16px]">✍️</span>
-          </button>
-        </div>
-      )}
-
       {showPlusButton && (
         <div className="absolute bottom-[110px] right-4 z-30">
           <button 
             onClick={handlePlusClick}
-            className={`w-12 h-12 bg-[var(--gold)] text-[#0D0D12] rounded-full flex items-center justify-center text-[28px] font-light shadow-[0_4px_12px_rgba(244,197,99,0.5)] active:scale-90 transition-transform duration-300 cursor-pointer border-none ${isActionMenuOpen ? 'rotate-45' : 'rotate-0'}`}
+            className="w-12 h-12 bg-[var(--gold)] text-[#0D0D12] rounded-full flex items-center justify-center text-[28px] font-light shadow-[0_4px_12px_rgba(244,197,99,0.5)] active:scale-90 transition-transform duration-300 cursor-pointer border-none"
             title={pathname === '/dashboard' ? "Crear cuenta bancaria" : "Añadir movimiento"}
           >
             +
