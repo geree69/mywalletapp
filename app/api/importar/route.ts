@@ -11,7 +11,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Falta la variable OPENROUTER_API_KEY en Vercel' }, { status: 500 });
     }
 
-    // Configuración para usar los servidores gratuitos de OpenRouter
     const openai = new OpenAI({
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: apiKey,
@@ -40,7 +39,6 @@ export async function POST(req: Request) {
     let messages: any[] = [];
 
     if (file) {
-      // Procesamiento de la imagen del ticket
       const bytes = await file.arrayBuffer();
       const base64Data = Buffer.from(bytes).toString('base64');
       const fileUrl = `data:${file.type};base64,${base64Data}`;
@@ -55,7 +53,6 @@ export async function POST(req: Request) {
         }
       ];
     } else {
-      // Procesamiento de solo texto
       messages = [
         {
           role: 'user',
@@ -64,23 +61,39 @@ export async function POST(req: Request) {
       ];
     }
 
-    // EL COMODÍN: OpenRouter elegirá automáticamente un modelo con visión 100% gratuito y activo
     const response = await openai.chat.completions.create({
       model: 'openrouter/free',
       messages: messages,
-      temperature: 0.1, // Temperatura baja para respuestas precisas y sin inventos
+      temperature: 0.0, // Aún más bajo para forzar a que sea modo "robot"
     });
 
-    let responseText = response.choices[0]?.message?.content || '{"transactions":[]}';
+    const responseText = response.choices[0]?.message?.content || '';
 
-    // LIMPIEZA EXTREMA DEL JSON: Para evitar que un texto mal formateado rompa tu app
-    responseText = responseText.replace(/```json/gi, '').replace(/```/gi, '').trim();
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/); 
-    if (jsonMatch) {
-        responseText = jsonMatch[0];
+    // --- LIMPIEZA EXTREMA Y BLINDADA ---
+    let cleanText = responseText.replace(/```json/gi, '').replace(/```/gi, '').trim();
+    
+    // Buscamos exactamente dónde empieza y termina el objeto JSON
+    const startIdx = cleanText.indexOf('{');
+    const endIdx = cleanText.lastIndexOf('}');
+    
+    if (startIdx !== -1 && endIdx !== -1) {
+      cleanText = cleanText.substring(startIdx, endIdx + 1);
     }
 
-    const data = JSON.parse(responseText);
+    let data;
+    try {
+      data = JSON.parse(cleanText);
+      
+      // Por si la IA devuelve directamente un array en lugar del objeto que le pedimos
+      if (Array.isArray(data)) {
+        data = { transactions: data };
+      }
+    } catch (parseError) {
+      console.error('Error al parsear el JSON de la IA:', cleanText);
+      return NextResponse.json({ 
+        error: 'La IA devolvió los datos con un formato extraño. Por favor, inténtalo de nuevo.' 
+      }, { status: 400 });
+    }
 
     return NextResponse.json(data);
   } catch (error: any) {
