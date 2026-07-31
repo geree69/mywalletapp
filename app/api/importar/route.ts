@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     - type: "expense" o "income".
     - category: Categoría del gasto/ingreso.
     - isRecurring: false.
-    IMPORTANTE: No añadas saludos, ni explicaciones, ni texto en formato markdown. Devuelve SOLO el código JSON puro.`;
+    IMPORTANTE: No añadas saludos, ni explicaciones. Devuelve SOLO el código JSON puro.`;
 
     let messages: any[] = [];
 
@@ -61,18 +61,16 @@ export async function POST(req: Request) {
       ];
     }
 
+    // LISTA DE RESPALDO: Usamos los modelos gratuitos de Gemini con visión. Si falla el 2.0, prueba el 1.5.
     const response = await openai.chat.completions.create({
-      model: 'openrouter/free',
+      model: 'google/gemini-2.0-flash:free,google/gemini-1.5-flash:free',
       messages: messages,
-      temperature: 0.0, // Aún más bajo para forzar a que sea modo "robot"
+      temperature: 0.0,
     });
 
     const responseText = response.choices[0]?.message?.content || '';
 
-    // --- LIMPIEZA EXTREMA Y BLINDADA ---
     let cleanText = responseText.replace(/```json/gi, '').replace(/```/gi, '').trim();
-    
-    // Buscamos exactamente dónde empieza y termina el objeto JSON
     const startIdx = cleanText.indexOf('{');
     const endIdx = cleanText.lastIndexOf('}');
     
@@ -83,15 +81,14 @@ export async function POST(req: Request) {
     let data;
     try {
       data = JSON.parse(cleanText);
-      
-      // Por si la IA devuelve directamente un array en lugar del objeto que le pedimos
       if (Array.isArray(data)) {
         data = { transactions: data };
       }
     } catch (parseError) {
-      console.error('Error al parsear el JSON de la IA:', cleanText);
+      // AQUÍ ESTÁ LA MAGIA NUEVA: Si falla, te mostrará qué narices ha respondido la IA
+      console.error('Error al parsear:', cleanText);
       return NextResponse.json({ 
-        error: 'La IA devolvió los datos con un formato extraño. Por favor, inténtalo de nuevo.' 
+        error: `La IA no devolvió un formato válido. Respuesta de la IA: "${responseText.substring(0, 150)}..."` 
       }, { status: 400 });
     }
 
