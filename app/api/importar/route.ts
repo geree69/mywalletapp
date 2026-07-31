@@ -61,7 +61,8 @@ export async function POST(req: Request) {
       ];
     }
 
-    // LISTA DE RESPALDO CORRECTA: Si falla el primero, OpenRouter saltará automáticamente a los siguientes de la lista
+    // Le añadimos "as any" para que TypeScript ignore la regla estricta de OpenAI
+    // y nos permita pasar la lista de modelos de OpenRouter sin dar error en Vercel.
     const response = await openai.chat.completions.create({
       model: 'google/gemini-2.0-flash-exp:free',
       messages: messages,
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
           'qwen/qwen-2-vl-7b-instruct:free'
         ]
       }
-    });
+    } as any);
 
     const responseText = response.choices[0]?.message?.content || '';
 
@@ -91,7 +92,6 @@ export async function POST(req: Request) {
         data = { transactions: data };
       }
     } catch (parseError) {
-      // AQUÍ ESTÁ LA MAGIA NUEVA: Si falla, te mostrará qué narices ha respondido la IA
       console.error('Error al parsear:', cleanText);
       return NextResponse.json({ 
         error: `La IA no devolvió un formato válido. Respuesta de la IA: "${responseText.substring(0, 150)}..."` 
