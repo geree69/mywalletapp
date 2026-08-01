@@ -100,10 +100,14 @@ export default function AhorroPage() {
               const lastUpdated = acc.taeLastUpdated ? new Date(acc.taeLastUpdated).getTime() : start;
               const daysSinceUpd = Math.max(0, Math.floor((todayTime - lastUpdated) / (1000 * 60 * 60 * 24)));
               
-              const accumulatedBase = Number(acc.taeAccumulated) || 0;
+              // El beneficio acumulado que el usuario mete es BRUTO
+              const accumulatedBaseGross = Number(acc.taeAccumulated) || 0;
               
-              // Fórmula NETA: Beneficio previo + ((Capital actual * TAE / 365) * días transcurridos * 0.81)
-              earnedSoFarNet = accumulatedBase + ((balance * (tae / 100) / 365) * daysSinceUpd * 0.81);
+              // Calculamos el nuevo beneficio BRUTO generado desde la última actualización
+              const newGross = (balance * (tae / 100) / 365) * daysSinceUpd;
+              
+              // Fórmula NETA FINAL: (Bruto guardado + Bruto nuevo) * 0.81
+              earnedSoFarNet = (accumulatedBaseGross + newGross) * 0.81;
             }
 
             return (
@@ -150,10 +154,9 @@ export default function AhorroPage() {
                           />
                         </div>
                         
-                        {/* Campo opcional actualizado a Neto */}
                         <div className="col-span-2 mt-1">
                           <label className="block text-[10px] text-[var(--text-soft)] mb-1 uppercase text-[var(--teal-d)] font-semibold">
-                            Beneficio previo acumulado (opcional, Neto €)
+                            Beneficio previo acumulado (opcional, Bruto €)
                           </label>
                           <input 
                             type="number"
@@ -164,7 +167,7 @@ export default function AhorroPage() {
                             className="w-full p-2 rounded-[6px] border border-[var(--teal-d)] bg-[rgba(42,157,143,0.05)] text-[var(--ink)] text-[12px] outline-none font-['IBM_Plex_Mono']"
                           />
                           <p className="text-[9px] text-[var(--text-soft)] m-0 mt-1.5 leading-tight">
-                            Si ya has ganado dinero previamente con esta cuenta, ponlo aquí para sumarlo a lo que vas a generar a partir de ahora. Si lo dejas vacío, se calculará solo desde la fecha de inicio.
+                            Si ya has ganado dinero previamente con esta cuenta, pon el importe BRUTO que te marca tu banco. Se aplicará la retención del 19% al resultado final.
                           </p>
                         </div>
                       </div>
