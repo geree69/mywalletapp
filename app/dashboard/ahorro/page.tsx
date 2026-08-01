@@ -18,8 +18,6 @@ export default function AhorroPage() {
   const { state, saveState } = useAppContext();
   const accounts = state.accounts || [];
 
-  // ARREGLO CLAVE: Ahora filtramos usando el nuevo formato "purpose" (savings/both), 
-  // manteniendo compatibilidad con las cuentas antiguas (ahorro/ambas) por si acaso.
   const savingsAccounts = accounts.filter(
     (acc: any) => acc.purpose === 'savings' || acc.purpose === 'both' || acc.type === 'ahorro' || acc.type === 'ambas'
   );
@@ -85,10 +83,11 @@ export default function AhorroPage() {
           {savingsAccounts.map((acc: any) => {
             const balance = Number(acc.balance || 0);
             const tae = Number(acc.tae || 0);
-            const estimatedAnnualReturn = (balance * tae) / 100;
             
-            // Cálculo de beneficio generado inteligente
-            let earnedSoFar = 0;
+            // CÁLCULO NETO: Le aplicamos el 81% (descontando el 19% de IRPF)
+            const estimatedAnnualReturnNet = ((balance * tae) / 100) * 0.81;
+            
+            let earnedSoFarNet = 0;
             let daysElapsed = 0;
             
             if (tae > 0 && acc.taeStartDate) {
@@ -96,17 +95,15 @@ export default function AhorroPage() {
               const start = new Date(acc.taeStartDate).getTime();
               const todayTime = new Date(todayStr).getTime();
               
-              // Días totales desde que abrió la cuenta
               daysElapsed = Math.max(0, Math.floor((todayTime - start) / (1000 * 60 * 60 * 24)));
               
-              // Días transcurridos desde que introdujo su beneficio acumulado
               const lastUpdated = acc.taeLastUpdated ? new Date(acc.taeLastUpdated).getTime() : start;
               const daysSinceUpd = Math.max(0, Math.floor((todayTime - lastUpdated) / (1000 * 60 * 60 * 24)));
               
               const accumulatedBase = Number(acc.taeAccumulated) || 0;
               
-              // Fórmula: Beneficio previo + (Capital actual * TAE / 365) * días transcurridos
-              earnedSoFar = accumulatedBase + (balance * (tae / 100) / 365) * daysSinceUpd;
+              // Fórmula NETA: Beneficio previo + ((Capital actual * TAE / 365) * días transcurridos * 0.81)
+              earnedSoFarNet = accumulatedBase + ((balance * (tae / 100) / 365) * daysSinceUpd * 0.81);
             }
 
             return (
@@ -119,7 +116,6 @@ export default function AhorroPage() {
                   <div>
                     <p className="font-semibold text-[14px] text-[var(--ink)] m-0">{acc.name}</p>
                     <p className="text-[10px] text-[var(--text-soft)] uppercase m-0 mt-0.5">
-                      {/* Ajustado también el texto descriptivo */}
                       {(acc.purpose === 'savings' || acc.type === 'ahorro') ? 'Cuenta de Ahorro' : 'Día a día y Ahorro'}
                     </p>
                   </div>
@@ -154,10 +150,10 @@ export default function AhorroPage() {
                           />
                         </div>
                         
-                        {/* Campo opcional para sumar lo ya ganado */}
+                        {/* Campo opcional actualizado a Neto */}
                         <div className="col-span-2 mt-1">
                           <label className="block text-[10px] text-[var(--text-soft)] mb-1 uppercase text-[var(--teal-d)] font-semibold">
-                            Beneficio previo acumulado (opcional, Bruto €)
+                            Beneficio previo acumulado (opcional, Neto €)
                           </label>
                           <input 
                             type="number"
@@ -221,9 +217,9 @@ export default function AhorroPage() {
                       {tae > 0 && (
                         <div className="text-right flex flex-col gap-1.5">
                           <div>
-                            <p className="text-[10px] text-[var(--text-soft)] m-0">Estimado anual (Bruto)</p>
+                            <p className="text-[10px] text-[var(--text-soft)] m-0">Estimado anual (Neto)</p>
                             <p className="font-['IBM_Plex_Mono'] text-[12px] font-medium text-[var(--text-soft)] m-0">
-                              +{fmt(estimatedAnnualReturn)}
+                              +{fmt(estimatedAnnualReturnNet)}
                             </p>
                           </div>
                         </div>
@@ -232,14 +228,14 @@ export default function AhorroPage() {
                   )}
                 </div>
 
-                {/* Resaltado del Beneficio Generado (Solo si hay TAE) */}
+                {/* Resaltado del Beneficio Generado Neto */}
                 {!editingTaeId && tae > 0 && (
                   <div className="bg-[rgba(42,157,143,0.1)] border border-[rgba(42,157,143,0.2)] rounded-[8px] p-2.5 flex justify-between items-center mt-2">
                     <span className="text-[11px] font-medium text-[var(--teal-d)]">
-                      Beneficio generado (Bruto)
+                      Beneficio generado (Neto tras 19% IRPF)
                     </span>
                     <span className="font-['IBM_Plex_Mono'] text-[14px] font-bold text-[var(--teal-d)]">
-                      +{fmt(earnedSoFar)}
+                      +{fmt(earnedSoFarNet)}
                     </span>
                   </div>
                 )}
