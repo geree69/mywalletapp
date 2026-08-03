@@ -147,7 +147,7 @@ export default function InformesPage() {
       
       filteredTransactions = transactions.filter((t: any) => {
         if (!t.date) return false;
-        const tMonthKey = t.date.slice(0, 7); // YYYY-MM
+        const tMonthKey = t.date.slice(0, 7);
         return tMonthKey >= start && tMonthKey <= end;
       });
       title = `Extracto Personalizado (${start} a ${end})`;
@@ -234,7 +234,7 @@ export default function InformesPage() {
                 cursor={{ fill: 'rgba(255,255,255,0.03)' }}
                 contentStyle={{ backgroundColor: '#121218', border: '1px solid #2A2A38', borderRadius: '8px', fontSize: '12px', color: '#FFF' }}
                 itemStyle={{ fontWeight: 500 }}
-                formatter={(value: number) => fmt(value)}
+                formatter={(value: any) => fmt(Number(value))}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '15px' }} iconType="circle" />
               <Bar dataKey="Patrimonio" name="Patrimonio" fill="#FFFFFF" radius={[2, 2, 0, 0]} />
@@ -245,7 +245,7 @@ export default function InformesPage() {
         </div>
       </div>
 
-      {/* SECCIÓN DE DESCARGAS (DISEÑO VERTICAL APILADO) */}
+      {/* SECCIÓN DE DESCARGAS */}
       <div className="bg-[var(--paper-2)] border border-[var(--paper-line)] rounded-[var(--radius)] p-5 shadow-sm space-y-5">
         <div>
           <h3 className="text-[15px] font-semibold text-[var(--ink)] m-0 mb-1">Generar Extracto en PDF</h3>
@@ -257,7 +257,6 @@ export default function InformesPage() {
         ) : (
           <div className="space-y-4">
             
-            {/* TIPO DE INFORME */}
             <div className="w-full md:w-1/2">
               <label className="block text-[10px] text-[var(--text-soft)] mb-1.5 uppercase font-medium">Tipo de informe</label>
               <select 
@@ -271,8 +270,6 @@ export default function InformesPage() {
               </select>
             </div>
 
-            {/* OPCIONES DINÁMICAS (Todas apiladas) */}
-            
             {reportType === 'mensual' && (
               <div className="w-full md:w-1/2">
                 <label className="block text-[10px] text-[var(--text-soft)] mb-1.5 uppercase font-medium">Selecciona el mes</label>
@@ -333,7 +330,6 @@ export default function InformesPage() {
               </div>
             )}
 
-            {/* BOTÓN DESCARGAR */}
             <div className="pt-2">
               <button 
                 onClick={handleGeneratePDF}
