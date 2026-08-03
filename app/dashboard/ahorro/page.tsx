@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import Link from 'next/link';
 
 const fmt = (n: number) => {
   const v = Number(n) || 0;
@@ -66,13 +67,24 @@ export default function AhorroPage() {
 
   return (
     <div className="flex flex-col space-y-4 pb-6">
-      <div>
-        <h2 className="font-['Playfair_Display'] text-[20px] font-semibold m-0 mb-1 text-[var(--ink)] tracking-wide">
-          Ahorro y TAE
-        </h2>
-        <p className="text-[12px] text-[var(--text-soft)] m-0 leading-relaxed">
-          Gestiona tus cuentas de ahorro y visualiza los intereses que generan día a día.
-        </p>
+      
+      {/* CABECERA CON EL NUEVO BOTÓN DE INFORMES */}
+      <div className="flex justify-between items-start gap-4">
+        <div>
+          <h2 className="font-['Playfair_Display'] text-[20px] font-semibold m-0 mb-1 text-[var(--ink)] tracking-wide">
+            Ahorro y TAE
+          </h2>
+          <p className="text-[12px] text-[var(--text-soft)] m-0 leading-relaxed">
+            Gestiona tus cuentas de ahorro y visualiza los intereses que generan día a día.
+          </p>
+        </div>
+        <Link 
+          href="/dashboard/informes"
+          className="shrink-0 bg-[var(--paper-2)] border border-[var(--paper-line)] text-[var(--ink)] px-3 py-2 rounded-[8px] text-[11px] font-semibold flex items-center gap-1.5 hover:border-[var(--gold)] hover:text-[var(--gold)] transition-colors no-underline cursor-pointer"
+        >
+          <span>Informes</span>
+          <span className="text-[14px]">📊</span>
+        </Link>
       </div>
 
       {savingsAccounts.length === 0 ? (
