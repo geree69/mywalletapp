@@ -12,12 +12,9 @@
     "@google/genai": "^2.13.0",
     "@google/generative-ai": "^0.24.1",
     "firebase": "^12.16.0",
-<<<<<<< HEAD
     "groq-sdk": "^1.4.1",
-=======
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
->>>>>>> pruebas
     "lucide-react": "^1.25.0",
     "next": "16.2.11",
     "openai": "^7.2.0",
